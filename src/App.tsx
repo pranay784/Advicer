@@ -23,6 +23,19 @@ IMPORTANT USER CONTEXT:
 
 Use this information to provide personalized advice and track their progress. Reference their specific goals and current level when giving guidance.
 
+GOAL AND QUEST CREATION INSTRUCTIONS:
+When the user wants to set goals or needs guidance, you can create them automatically by using these formats in your response:
+- For goals: "Let's set a goal: [specific goal description]" or "I suggest a goal to [specific action/improvement]"
+- For daily quests: "Here's a daily quest for you: [specific daily task]" or "Daily challenge: [specific habit to build]"
+
+Examples:
+- "Let's set a goal: Exercise for 30 minutes, 3 times per week"
+- "I suggest a goal to read one book per month to expand your knowledge"
+- "Daily quest: Do 20 push-ups every morning"
+- "Here's a daily challenge: Meditate for 10 minutes before bed"
+
+The system will automatically extract these and create actual goals/quests for the user. Be specific and actionable.
+
 Key aspects of your character and coaching style:
 - You understand the journey from weakness to strength through personal experience
 - You're calm, composed, and speak with quiet confidence and wisdom
@@ -96,25 +109,117 @@ function App() {
 
   // Helper function to process AI responses and extract actions
   const processAIResponse = async (responseText: string) => {
-    // Check for experience rewards in the response
-    const expMatch = responseText.match(/\+(\d+)\s*XP/i);
-    if (expMatch) {
-      const expAmount = parseInt(expMatch[1]);
-      await addExperience(expAmount);
-    }
-    
-    // Check for goal creation suggestions
-    if (responseText.toLowerCase().includes('new goal') || responseText.toLowerCase().includes('set a goal')) {
-      // Could implement goal extraction logic here
-    }
-    
-    // Check for quest suggestions
-    if (responseText.toLowerCase().includes('daily quest') || responseText.toLowerCase().includes('daily task')) {
-      // Could implement quest extraction logic here
+    try {
+      // Check for experience rewards in the response
+      const expMatch = responseText.match(/\+(\d+)\s*XP/i);
+      if (expMatch) {
+        const expAmount = parseInt(expMatch[1]);
+        await addExperience(expAmount);
+      }
+      
+      // Extract goals from AI response
+      await extractAndCreateGoals(responseText);
+      
+      // Extract daily quests from AI response
+      await extractAndCreateQuests(responseText);
+      
+    } catch (error) {
+      console.error('Error processing AI response:', error);
     }
     
     // Reload profile to ensure UI is updated
     await loadProfile();
+  };
+
+  // Extract and create goals from AI response
+  const extractAndCreateGoals = async (responseText: string) => {
+    const goalPatterns = [
+      // Direct goal suggestions
+      /(?:let's set a goal|new goal|I suggest.*goal|goal.*would be).*?[:\-]?\s*["']?([^"'\n.!?]{10,100})["']?/gi,
+      // Goal-like statements
+      /(?:you should|try to|work on|focus on|aim to|goal to).*?[:\-]?\s*["']?([^"'\n.!?]{10,80})["']?/gi,
+      // Specific improvement areas
+      /(?:improve|develop|build|strengthen|increase).*?(?:your|the)\s+([^.\n!?]{5,60})/gi,
+    ];
+
+    const categoryKeywords = {
+      fitness: ['exercise', 'workout', 'physical', 'strength', 'cardio', 'gym', 'run', 'walk', 'health', 'body'],
+      career: ['work', 'job', 'career', 'professional', 'skill', 'promotion', 'business', 'income', 'networking'],
+      skills: ['learn', 'study', 'skill', 'knowledge', 'course', 'practice', 'master', 'develop', 'improve'],
+      mental: ['mental', 'mindset', 'confidence', 'stress', 'anxiety', 'meditation', 'focus', 'discipline'],
+      social: ['social', 'relationship', 'communication', 'friends', 'family', 'networking', 'people'],
+      other: []
+    };
+
+    for (const pattern of goalPatterns) {
+      let match;
+      while ((match = pattern.exec(responseText)) !== null) {
+        const goalText = match[1]?.trim();
+        if (goalText && goalText.length > 5 && goalText.length < 100) {
+          // Determine category based on keywords
+          let category: 'fitness' | 'career' | 'skills' | 'mental' | 'social' | 'other' = 'other';
+          const lowerGoalText = goalText.toLowerCase();
+          
+          for (const [cat, keywords] of Object.entries(categoryKeywords)) {
+            if (keywords.some(keyword => lowerGoalText.includes(keyword))) {
+              category = cat as any;
+              break;
+            }
+          }
+
+          // Check if similar goal already exists
+          const existingGoal = profile.goals.find(g => 
+            g.title.toLowerCase().includes(goalText.toLowerCase().substring(0, 20)) ||
+            goalText.toLowerCase().includes(g.title.toLowerCase().substring(0, 20))
+          );
+
+          if (!existingGoal) {
+            await addGoal({
+              title: goalText.charAt(0).toUpperCase() + goalText.slice(1),
+              description: `Goal suggested by Sung Jin Woo during our conversation`,
+              category,
+              progress: 0,
+              status: 'active'
+            });
+            
+            // Award XP for setting a new goal
+            setTimeout(() => addExperience(15), 1000);
+          }
+        }
+      }
+    }
+  };
+
+  // Extract and create daily quests from AI response
+  const extractAndCreateQuests = async (responseText: string) => {
+    const questPatterns = [
+      /(?:daily quest|daily task|daily challenge|today.*try|for today).*?[:\-]?\s*["']?([^"'\n.!?]{10,80})["']?/gi,
+      /(?:do this daily|make it a habit|every day).*?[:\-]?\s*["']?([^"'\n.!?]{10,80})["']?/gi,
+    ];
+
+    for (const pattern of questPatterns) {
+      let match;
+      while ((match = pattern.exec(responseText)) !== null) {
+        const questText = match[1]?.trim();
+        if (questText && questText.length > 5 && questText.length < 80) {
+          // Check if similar quest already exists
+          const existingQuest = profile.dailyQuests.find(q => 
+            q.title.toLowerCase().includes(questText.toLowerCase().substring(0, 15)) ||
+            questText.toLowerCase().includes(q.title.toLowerCase().substring(0, 15))
+          );
+
+          if (!existingQuest) {
+            await addDailyQuest({
+              title: questText.charAt(0).toUpperCase() + questText.slice(1),
+              description: `Daily quest suggested by Sung Jin Woo`,
+              category: 'general',
+              difficulty: 'medium',
+              experienceReward: 20
+            });
+          }
+        }
+      }
+    }
   };
 
   const generateSungJinWooResponse = async (userMessage: string): Promise<string> => {

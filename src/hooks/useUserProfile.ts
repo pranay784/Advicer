@@ -78,6 +78,8 @@ export const useUserProfile = () => {
         savedProfile.createdAt = new Date(savedProfile.createdAt);
         setProfile(savedProfile);
       }
+    } catch (error) {
+      console.error('Error saving profile:', error);
     }
   };
 

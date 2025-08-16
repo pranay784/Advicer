@@ -45,7 +45,7 @@ Focus areas for coaching:
 Always relate your advice to Solo Leveling concepts when helpful - daily quests, stat points, leveling up, skill trees, etc. Keep responses encouraging, practical, and not too long. Reference their specific progress and goals to show you're tracking their journey.`;
 
 function App() {
-  const { profile, isLoading, updateProfile, getProfileSummary, saveConversation } = useUserProfile();
+  const { profile, isLoading, updateProfile, getProfileSummary, saveConversation, addExperience, addGoal, addDailyQuest, loadProfile } = useUserProfile();
   const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -93,6 +93,29 @@ function App() {
       }
     }
   }, [isLoading, profile]);
+
+  // Helper function to process AI responses and extract actions
+  const processAIResponse = async (responseText: string) => {
+    // Check for experience rewards in the response
+    const expMatch = responseText.match(/\+(\d+)\s*XP/i);
+    if (expMatch) {
+      const expAmount = parseInt(expMatch[1]);
+      await addExperience(expAmount);
+    }
+    
+    // Check for goal creation suggestions
+    if (responseText.toLowerCase().includes('new goal') || responseText.toLowerCase().includes('set a goal')) {
+      // Could implement goal extraction logic here
+    }
+    
+    // Check for quest suggestions
+    if (responseText.toLowerCase().includes('daily quest') || responseText.toLowerCase().includes('daily task')) {
+      // Could implement quest extraction logic here
+    }
+    
+    // Reload profile to ensure UI is updated
+    await loadProfile();
+  };
 
   const generateSungJinWooResponse = async (userMessage: string): Promise<string> => {
     try {
@@ -168,6 +191,9 @@ function App() {
     try {
       const responseText = await generateSungJinWooResponse(userMessage);
       
+      // Process the AI response for any actions
+      await processAIResponse(responseText);
+      
       // Show response in speech bubble
       setCurrentSJWMessage(responseText);
       setShowSpeechBubble(true);
@@ -190,10 +216,35 @@ function App() {
 
   const handleProfileSetupComplete = (profileData: any) => {
     // Update profile with setup data
-    updateProfile({
+    const updates = {
       name: profileData.name,
-      // You can add logic here to convert setup data to goals/quests
-    });
+    };
+    
+    // Convert setup goals to actual goals
+    if (profileData.primaryGoals && profileData.primaryGoals.length > 0) {
+      profileData.primaryGoals.forEach((goalType: string) => {
+        const goalTitles = {
+          fitness: 'Get Physically Stronger',
+          career: 'Advance My Career',
+          skills: 'Learn New Skills',
+          mental: 'Build Mental Strength',
+          habits: 'Develop Better Habits',
+          social: 'Improve Social Skills'
+        };
+        
+        if (goalTitles[goalType as keyof typeof goalTitles]) {
+          addGoal({
+            title: goalTitles[goalType as keyof typeof goalTitles],
+            description: `Working on ${goalType} improvement`,
+            category: goalType as any,
+            progress: 0,
+            status: 'active'
+          });
+        }
+      });
+    }
+    
+    updateProfile(updates);
     setShowProfileSetup(false);
     
     // Add a personalized welcome message
@@ -202,6 +253,11 @@ function App() {
     // Show setup completion message in speech bubble
     setCurrentSJWMessage(welcomeMessage);
     setShowSpeechBubble(true);
+    
+    // Award initial XP for completing setup
+    setTimeout(() => {
+      addExperience(25);
+    }, 2000);
   };
 
   if (isLoading) {

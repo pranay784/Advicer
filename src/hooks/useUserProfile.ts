@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { UserProfile, Goal, DailyQuest, Achievement } from '../types/user';
 
-const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
+const API_BASE = 'http://localhost:3001/api';
 
 const defaultProfile: UserProfile = {
-  id: 'loading',
+  id: 'default',
   level: 1,
   experience: 0,
   stats: {
@@ -37,17 +37,17 @@ export const useUserProfile = () => {
         // Convert date strings back to Date objects
         profileData.lastLogin = new Date(profileData.lastLogin);
         profileData.createdAt = new Date(profileData.createdAt);
-        profileData.goals = profileData.goals.map((goal: any) => ({
+        profileData.goals = (profileData.goals || []).map((goal: any) => ({
           ...goal,
           targetDate: goal.targetDate ? new Date(goal.targetDate) : undefined,
           createdAt: new Date(goal.createdAt),
         }));
-        profileData.dailyQuests = profileData.dailyQuests.map((quest: any) => ({
+        profileData.dailyQuests = (profileData.dailyQuests || []).map((quest: any) => ({
           ...quest,
           lastCompleted: quest.lastCompleted ? new Date(quest.lastCompleted) : undefined,
           createdAt: new Date(quest.createdAt),
         }));
-        profileData.achievements = profileData.achievements.map((achievement: any) => ({
+        profileData.achievements = (profileData.achievements || []).map((achievement: any) => ({
           ...achievement,
           unlockedAt: new Date(achievement.unlockedAt),
         }));
@@ -56,24 +56,8 @@ export const useUserProfile = () => {
       }
     } catch (error) {
       console.error('Error loading profile:', error);
-      // Fall back to local storage if server is unavailable
-      loadLocalProfile();
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadLocalProfile = () => {
-    try {
-      const saved = localStorage.getItem('sjw_user_profile');
-      if (saved) {
-        const parsedProfile = JSON.parse(saved);
-        parsedProfile.lastLogin = new Date(parsedProfile.lastLogin);
-        parsedProfile.createdAt = new Date(parsedProfile.createdAt);
-        setProfile(parsedProfile);
-      }
-    } catch (error) {
-      console.error('Error loading local profile:', error);
     }
   };
 
@@ -89,15 +73,11 @@ export const useUserProfile = () => {
 
       if (response.ok) {
         const savedProfile = await response.json();
+        // Convert date strings back to Date objects
+        savedProfile.lastLogin = new Date(savedProfile.lastLogin);
+        savedProfile.createdAt = new Date(savedProfile.createdAt);
         setProfile(savedProfile);
-      } else {
-        throw new Error('Server save failed');
       }
-    } catch (error) {
-      console.error('Error saving to server, using local storage:', error);
-      // Fallback to local storage
-      localStorage.setItem('sjw_user_profile', JSON.stringify(updatedProfile));
-      setProfile(updatedProfile);
     }
   };
 
@@ -123,6 +103,29 @@ export const useUserProfile = () => {
     saveProfile(updatedProfile);
   };
 
+  const addExperience = async (amount: number) => {
+    try {
+      const response = await fetch(`${API_BASE}/user/experience`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ amount }),
+      });
+
+      if (response.ok) {
+        const updatedProfile = await response.json();
+        // Convert date strings back to Date objects
+        updatedProfile.lastLogin = new Date(updatedProfile.lastLogin);
+        updatedProfile.createdAt = new Date(updatedProfile.createdAt);
+        setProfile(updatedProfile);
+        return updatedProfile;
+      }
+    } catch (error) {
+      console.error('Error adding experience:', error);
+    }
+  };
+
   const addGoal = async (goal: Omit<Goal, 'id' | 'createdAt'>) => {
     try {
       const response = await fetch(`${API_BASE}/user/goal`, {
@@ -135,11 +138,8 @@ export const useUserProfile = () => {
 
       if (response.ok) {
         const newGoal = await response.json();
-        const updatedProfile = {
-          ...profile,
-          goals: [...profile.goals, newGoal],
-        };
-        setProfile(updatedProfile);
+        // Reload profile to get updated data
+        await loadProfile();
       }
     } catch (error) {
       console.error('Error adding goal:', error);
@@ -147,26 +147,32 @@ export const useUserProfile = () => {
   };
 
   const updateGoal = (goalId: string, updates: Partial<Goal>) => {
-    const updatedGoals = profile.goals.map(goal =>
-      goal.id === goalId ? { ...goal, ...updates } : goal
-    );
-    const updatedProfile = { ...profile, goals: updatedGoals };
-    saveProfile(updatedProfile);
+    // Update goal via API
+    fetch(`${API_BASE}/user/goal/${goalId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    }).then(() => {
+      loadProfile(); // Reload to get updated data
+    }).catch(error => {
+      console.error('Error updating goal:', error);
+    });
   };
 
   const addDailyQuest = (quest: Omit<DailyQuest, 'id' | 'createdAt' | 'completed' | 'streak'>) => {
-    const newQuest: DailyQuest = {
-      ...quest,
-      id: 'quest_' + Date.now(),
-      completed: false,
-      streak: 0,
-      createdAt: new Date(),
-    };
-    const updatedProfile = {
-      ...profile,
-      dailyQuests: [...profile.dailyQuests, newQuest],
-    };
-    saveProfile(updatedProfile);
+    fetch(`${API_BASE}/user/quest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(quest),
+    }).then(() => {
+      loadProfile(); // Reload to get updated data
+    }).catch(error => {
+      console.error('Error adding quest:', error);
+    });
   };
 
   const completeQuest = async (questId: string) => {
@@ -181,6 +187,9 @@ export const useUserProfile = () => {
 
       if (response.ok) {
         const updatedProfile = await response.json();
+        // Convert date strings back to Date objects
+        updatedProfile.lastLogin = new Date(updatedProfile.lastLogin);
+        updatedProfile.createdAt = new Date(updatedProfile.createdAt);
         setProfile(updatedProfile);
       }
     } catch (error) {
@@ -189,16 +198,17 @@ export const useUserProfile = () => {
   };
 
   const addAchievement = (achievement: Omit<Achievement, 'id' | 'unlockedAt'>) => {
-    const newAchievement: Achievement = {
-      ...achievement,
-      id: 'achievement_' + Date.now(),
-      unlockedAt: new Date(),
-    };
-    const updatedProfile = {
-      ...profile,
-      achievements: [...profile.achievements, newAchievement],
-    };
-    saveProfile(updatedProfile);
+    fetch(`${API_BASE}/user/achievement`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(achievement),
+    }).then(() => {
+      loadProfile(); // Reload to get updated data
+    }).catch(error => {
+      console.error('Error adding achievement:', error);
+    });
   };
 
   const getProfileSummary = () => {
@@ -228,6 +238,7 @@ export const useUserProfile = () => {
     profile,
     isLoading,
     updateProfile,
+    addExperience,
     addGoal,
     updateGoal,
     addDailyQuest,
@@ -235,5 +246,6 @@ export const useUserProfile = () => {
     addAchievement,
     getProfileSummary,
     saveConversation,
+    loadProfile,
   };
 };

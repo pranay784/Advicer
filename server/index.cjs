@@ -112,6 +112,30 @@ app.post('/api/user/profile', async (req, res) => {
   }
 });
 
+app.post('/api/user/experience', async (req, res) => {
+  try {
+    await ensureDataDir();
+    const userId = getUserIdFromIP(req.ip);
+    const users = await loadUsers();
+    const { amount } = req.body;
+    
+    if (!users[userId]) {
+      users[userId] = createDefaultProfile(userId);
+    }
+    
+    // Add experience and calculate new level
+    users[userId].experience += amount;
+    users[userId].level = Math.floor(users[userId].experience / 100) + 1;
+    users[userId].lastLogin = new Date().toISOString();
+    
+    await saveUsers(users);
+    res.json(users[userId]);
+  } catch (error) {
+    console.error('Error adding experience:', error);
+    res.status(500).json({ error: 'Failed to add experience' });
+  }
+});
+
 app.post('/api/user/conversation', async (req, res) => {
   try {
     await ensureDataDir();
@@ -176,6 +200,63 @@ app.post('/api/user/goal', async (req, res) => {
   }
 });
 
+app.put('/api/user/goal/:goalId', async (req, res) => {
+  try {
+    await ensureDataDir();
+    const userId = getUserIdFromIP(req.ip);
+    const users = await loadUsers();
+    const { goalId } = req.params;
+    
+    if (!users[userId]) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const goalIndex = users[userId].goals.findIndex(g => g.id === goalId);
+    if (goalIndex === -1) {
+      return res.status(404).json({ error: 'Goal not found' });
+    }
+    
+    // Update goal
+    users[userId].goals[goalIndex] = { ...users[userId].goals[goalIndex], ...req.body };
+    users[userId].lastLogin = new Date().toISOString();
+    
+    await saveUsers(users);
+    res.json(users[userId].goals[goalIndex]);
+  } catch (error) {
+    console.error('Error updating goal:', error);
+    res.status(500).json({ error: 'Failed to update goal' });
+  }
+});
+
+app.post('/api/user/quest', async (req, res) => {
+  try {
+    await ensureDataDir();
+    const userId = getUserIdFromIP(req.ip);
+    const users = await loadUsers();
+    
+    if (!users[userId]) {
+      users[userId] = createDefaultProfile(userId);
+    }
+    
+    const newQuest = {
+      id: 'quest_' + Date.now(),
+      ...req.body,
+      completed: false,
+      streak: 0,
+      createdAt: new Date().toISOString()
+    };
+    
+    users[userId].dailyQuests.push(newQuest);
+    users[userId].lastLogin = new Date().toISOString();
+    await saveUsers(users);
+    
+    res.json(newQuest);
+  } catch (error) {
+    console.error('Error adding quest:', error);
+    res.status(500).json({ error: 'Failed to add quest' });
+  }
+});
+
 app.post('/api/user/quest/complete', async (req, res) => {
   try {
     await ensureDataDir();
@@ -207,6 +288,33 @@ app.post('/api/user/quest/complete', async (req, res) => {
   } catch (error) {
     console.error('Error completing quest:', error);
     res.status(500).json({ error: 'Failed to complete quest' });
+  }
+});
+
+app.post('/api/user/achievement', async (req, res) => {
+  try {
+    await ensureDataDir();
+    const userId = getUserIdFromIP(req.ip);
+    const users = await loadUsers();
+    
+    if (!users[userId]) {
+      users[userId] = createDefaultProfile(userId);
+    }
+    
+    const newAchievement = {
+      id: 'achievement_' + Date.now(),
+      ...req.body,
+      unlockedAt: new Date().toISOString()
+    };
+    
+    users[userId].achievements.push(newAchievement);
+    users[userId].lastLogin = new Date().toISOString();
+    await saveUsers(users);
+    
+    res.json(newAchievement);
+  } catch (error) {
+    console.error('Error adding achievement:', error);
+    res.status(500).json({ error: 'Failed to add achievement' });
   }
 });
 

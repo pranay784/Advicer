@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Crown, Sword } from 'lucide-react';
+import { Send, User, Crown, Sword, MessageCircle } from 'lucide-react';
 import axios from 'axios';
 import { useUserProfile } from './hooks/useUserProfile';
 import ProfileSetup from './components/ProfileSetup';
 import UserStats from './components/UserStats';
+import SungJinWooAvatar from './components/SungJinWooAvatar';
+import SpeechBubble from './components/SpeechBubble';
 import { UserProfile } from './types/user';
 
 interface Message {
@@ -56,6 +58,8 @@ function App() {
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [currentSJWMessage, setCurrentSJWMessage] = useState<string>('');
+  const [showSpeechBubble, setShowSpeechBubble] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -72,6 +76,12 @@ function App() {
           sender: 'sjw',
           timestamp: new Date()
         }]);
+        
+        // Show initial message in speech bubble
+        setTimeout(() => {
+          setCurrentSJWMessage("Welcome, future hunter. I'm Sung Jin Woo, and I'm here to help you level up in real life. Just like how the System guided my growth from the weakest E-rank to Shadow Monarch, I'll help you become stronger every day. Would you like me to understand your current situation better so I can provide personalized guidance?");
+          setShowSpeechBubble(true);
+        }, 1000);
       } else {
         // Returning user - personalized welcome
         const daysSince = Math.floor((Date.now() - profile.lastLogin.getTime()) / (1000 * 60 * 60 * 24));
@@ -97,6 +107,12 @@ function App() {
           sender: 'sjw',
           timestamp: new Date()
         }]);
+        
+        // Show welcome message in speech bubble
+        setTimeout(() => {
+          setCurrentSJWMessage(welcomeMessage);
+          setShowSpeechBubble(true);
+        }, 1000);
       }
     }
   }, [isLoading, profile]);
@@ -197,6 +213,10 @@ function App() {
       };
 
       setMessages(prev => [...prev, sjwMessage]);
+      
+      // Show response in speech bubble
+      setCurrentSJWMessage(responseText);
+      setShowSpeechBubble(true);
     } catch (err) {
       setError('Failed to get response from Sung Jin Woo. Please try again.');
     } finally {
@@ -227,6 +247,10 @@ function App() {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, welcomeMessage]);
+    
+    // Show setup completion message in speech bubble
+    setCurrentSJWMessage(welcomeMessage.text);
+    setShowSpeechBubble(true);
   };
 
   if (isLoading) {
@@ -251,9 +275,46 @@ function App() {
         />
       )}
 
+      {/* Sung Jin Woo Avatar and Speech Bubble - Fixed Position */}
+      <div className="fixed top-4 right-4 z-40 flex flex-col items-end space-y-4">
+        {/* Speech Bubble */}
+        {showSpeechBubble && currentSJWMessage && (
+          <div className="animate-in slide-in-from-right-4 duration-500">
+            <SpeechBubble 
+              message={currentSJWMessage}
+              isTyping={isTyping}
+              onTypingComplete={() => {
+                // Auto-hide speech bubble after a delay
+                setTimeout(() => setShowSpeechBubble(false), 5000);
+              }}
+            />
+          </div>
+        )}
+        
+        {/* Avatar */}
+        <div className="animate-in slide-in-from-right-4 duration-300">
+          <SungJinWooAvatar 
+            isTyping={isTyping}
+            isActive={showSpeechBubble}
+            message={currentSJWMessage}
+          />
+        </div>
+        
+        {/* Toggle Speech Bubble Button */}
+        {!showSpeechBubble && currentSJWMessage && (
+          <button
+            onClick={() => setShowSpeechBubble(true)}
+            className="bg-purple-600/80 hover:bg-purple-600 text-white p-2 rounded-full shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-105"
+            title="Show last message"
+          >
+            <MessageCircle className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
       {/* Header */}
       <div className="bg-black/50 backdrop-blur-sm border-b border-purple-500/20 p-4">
-        <div className="max-w-4xl mx-auto flex items-center space-x-4">
+        <div className="max-w-4xl mx-auto flex items-center space-x-4 pr-32">
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-lg">
             <Crown className="w-6 h-6 text-white" />
           </div>
@@ -283,7 +344,7 @@ function App() {
 
       {/* Chat Messages */}
       <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6 pr-32">
           {messages.map((message) => (
             <div
               key={message.id}
@@ -347,7 +408,7 @@ function App() {
       {/* Error Message */}
       {error && (
         <div className="bg-red-900/50 border-t border-red-500/20 p-3">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-4xl mx-auto pr-32">
             <p className="text-red-300 text-sm text-center">{error}</p>
           </div>
         </div>
@@ -355,7 +416,7 @@ function App() {
 
       {/* Input Area */}
       <div className="bg-black/50 backdrop-blur-sm border-t border-purple-500/20 p-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto pr-32">
           <div className="flex items-end space-x-4">
             <div className="flex-1 relative">
               <textarea

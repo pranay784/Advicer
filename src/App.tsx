@@ -115,7 +115,7 @@ function App() {
       const profileSummary = getProfileSummary();
       
       if (!apiKey) {
-        throw new Error('OpenRouter API key not found. Please add your API key to the .env file.');
+        return "I sense that my connection to the System is not properly configured. Please make sure your OpenRouter API key is set up in your environment variables. Without it, I cannot access my full powers to guide you.";
       }
 
       const response = await axios.post(
@@ -148,6 +148,16 @@ function App() {
       return response.data.choices[0].message.content;
     } catch (error) {
       console.error('Error generating response:', error);
+      
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          return "The System is rejecting my access - it seems the API key is invalid. Please check your OpenRouter API key configuration.";
+        } else if (error.response?.status === 429) {
+          return "I'm being rate limited by the System. Please wait a moment before trying again.";
+        } else if (error.code === 'NETWORK_ERROR' || !navigator.onLine) {
+          return "I'm having trouble connecting to the System. Please check your internet connection and try again.";
+        }
+      }
       
       // Fallback responses if API fails
       const fallbackResponses = [

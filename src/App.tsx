@@ -23,30 +23,24 @@ IMPORTANT USER CONTEXT:
 
 Use this information to provide personalized advice and track their progress. Reference their specific goals and current level when giving guidance.
 
-CRITICAL: You MUST create goals and quests for the user. Use these EXACT formats:
+CRITICAL GOAL CREATION: When suggesting goals, use these EXACT phrases:
+- "I suggest you work on [specific goal]."
+- "You should focus on [specific goal]."
+- "Try to [specific goal]."
+- "My goal for you is [specific goal]."
 
-GOAL FORMAT (use at least one per response when giving advice):
-- "GOAL: [specific actionable goal]"
-- "NEW GOAL: [specific actionable goal]"
-
-QUEST FORMAT (for daily habits):
-- "DAILY QUEST: [specific daily task]"
-- "HABIT QUEST: [specific daily action]"
-
-XP REWARDS (award XP for engagement):
-- "REWARD: +[number] XP for [reason]"
-
-MANDATORY: Every response should include:
-1. At least one GOAL or DAILY QUEST if giving advice
-2. An XP reward for the conversation
-3. Reference their current level and progress
+CRITICAL QUEST CREATION: For daily habits, use these EXACT phrases:
+- "Daily habit: [specific daily task]."
+- "Do this every day: [specific task]."
+- "Make it a habit: [specific action]."
 
 Examples:
-- "GOAL: Exercise for 30 minutes daily"
-- "DAILY QUEST: Do 20 push-ups every morning"  
-- "REWARD: +15 XP for setting a fitness goal"
+- "I suggest you work on reading one book per month."
+- "You should focus on exercising 30 minutes daily."
+- "Daily habit: Do 20 push-ups every morning."
+- "Make it a habit: meditate for 10 minutes before bed."
 
-The system automatically processes these and updates the user's profile in real-time.
+The system automatically extracts these phrases and creates goals/quests. Be specific and actionable.
 
 Key aspects of your character and coaching style:
 - You understand the journey from weakness to strength through personal experience
@@ -281,13 +275,15 @@ function App() {
     }
   };
 
+  // Test processing a sample AI response
+  const testProcessResponse = async () => {
+    console.log('🧪 TESTING AI RESPONSE PROCESSING...');
+    const testResponse = "GOAL: Exercise for 30 minutes daily. DAILY QUEST: Do 10 push-ups every morning. REWARD: +20 XP for starting your fitness journey!";
+    await processAIResponse(testResponse);
+  };
+
   // Add test button in development
   const isDevelopment = import.meta.env.DEV;
-
-  // Force process a test response
-  const testProcessResponse = async () => {
-    await processAIResponse("I suggest you work on exercising for 30 minutes daily. This will help build your physical strength.");
-  };
 
   const generateSungJinWooResponse = async (userMessage: string): Promise<string> => {
     try {

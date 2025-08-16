@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { UserProfile, Goal, DailyQuest, Achievement } from '../types/user';
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = '/api';
 
 const defaultProfile: UserProfile = {
   id: 'default',

@@ -23,27 +23,24 @@ IMPORTANT USER CONTEXT:
 
 Use this information to provide personalized advice and track their progress. Reference their specific goals and current level when giving guidance.
 
-CRITICAL: GOAL AND QUEST CREATION INSTRUCTIONS:
-When the user wants to set goals or needs guidance, you MUST use these EXACT formats in your response to create them automatically:
-
-FOR GOALS - Use these exact phrases:
-- "Let's set a goal: [specific goal description]."
-- "I suggest you work on [specific improvement area]."
+CRITICAL GOAL CREATION: When suggesting goals, use these EXACT phrases:
+- "I suggest you work on [specific goal]."
 - "You should focus on [specific goal]."
-- "Try to [specific actionable goal]."
+- "Try to [specific goal]."
+- "My goal for you is [specific goal]."
 
-FOR DAILY QUESTS - Use these exact phrases:
-- "Daily quest: [specific daily task]."
-- "Make it a habit to [specific daily action]."
-- "Do this daily: [specific task]."
+CRITICAL QUEST CREATION: For daily habits, use these EXACT phrases:
+- "Daily habit: [specific daily task]."
+- "Do this every day: [specific task]."
+- "Make it a habit: [specific action]."
 
 Examples:
-- "Let's set a goal: Exercise for 30 minutes, 3 times per week."
 - "I suggest you work on reading one book per month."
-- "Daily quest: Do 20 push-ups every morning."
-- "Make it a habit to meditate for 10 minutes before bed."
+- "You should focus on exercising 30 minutes daily."
+- "Daily habit: Do 20 push-ups every morning."
+- "Make it a habit: meditate for 10 minutes before bed."
 
-The system will automatically extract these and create actual goals/quests for the user. Be specific and actionable. ALWAYS end goal/quest statements with periods.
+The system automatically extracts these phrases and creates goals/quests. Be specific and actionable.
 
 Key aspects of your character and coaching style:
 - You understand the journey from weakness to strength through personal experience
@@ -118,24 +115,27 @@ function App() {
 
   // Helper function to process AI responses and extract actions
   const processAIResponse = async (responseText: string) => {
-    console.log('Processing AI response for actions:', responseText);
+    console.log('🔍 PROCESSING AI RESPONSE:', responseText);
     
     try {
       // Check for experience rewards in the response
       const expMatch = responseText.match(/\+(\d+)\s*XP/i);
       if (expMatch) {
         const expAmount = parseInt(expMatch[1]);
-        console.log('Found XP reward in response:', expAmount);
+        console.log('💰 Found XP reward in response:', expAmount);
         await addExperience(expAmount);
       }
       
       // Extract goals from AI response
+      console.log('🎯 Starting goal extraction...');
       await extractAndCreateGoals(responseText);
       
       // Extract daily quests from AI response
+      console.log('⚡ Starting quest extraction...');
       await extractAndCreateQuests(responseText);
       
       // Award XP for having a conversation (small reward)
+      console.log('💫 Awarding conversation XP...');
       await addExperience(5);
       
     } catch (error) {
@@ -143,19 +143,19 @@ function App() {
     }
     
     // Reload profile to ensure UI is updated
+    console.log('🔄 Reloading profile...');
     await loadProfile();
   };
 
   // Extract and create goals from AI response
   const extractAndCreateGoals = async (responseText: string) => {
+    console.log('🎯 EXTRACTING GOALS FROM:', responseText);
+    
     const goalPatterns = [
-      // More specific goal patterns
-      /(?:let's set a goal|new goal|I suggest.*goal|goal.*would be)[:\-]?\s*(.{10,100}?)(?:\.|!|\?|$)/gi,
-      /(?:you should|try to|work on|focus on|aim to|goal to)[:\-]?\s*(.{10,80}?)(?:\.|!|\?|$)/gi,
-      /(?:improve|develop|build|strengthen|increase)\s+(?:your\s+)?(.{5,60}?)(?:\.|!|\?|$)/gi,
-      // Direct suggestions
-      /I recommend\s+(.{10,80}?)(?:\.|!|\?|$)/gi,
-      /Start\s+(.{10,80}?)(?:\.|!|\?|$)/gi,
+      // Simple and direct patterns
+      /(?:goal|suggest|should|try to|work on|focus on|aim to|improve|develop|build|strengthen)[:\s]+([^.!?]{10,100})[.!?]/gi,
+      /(?:let's|you need to|you could|consider|start)[:\s]+([^.!?]{10,80})[.!?]/gi,
+      /(?:I recommend|my advice is)[:\s]+([^.!?]{10,80})[.!?]/gi,
     ];
 
     const categoryKeywords = {
@@ -167,13 +167,13 @@ function App() {
       other: []
     };
 
-    console.log('Extracting goals from response:', responseText);
+    console.log('🔍 Using patterns to find goals...');
 
     for (const pattern of goalPatterns) {
       let match;
       while ((match = pattern.exec(responseText)) !== null) {
         const goalText = match[1]?.trim();
-        console.log('Found potential goal:', goalText);
+        console.log('🎯 Found potential goal:', goalText);
         
         if (goalText && goalText.length > 5 && goalText.length < 100) {
           // Determine category based on keywords
@@ -194,7 +194,7 @@ function App() {
           );
 
           if (!existingGoal) {
-            console.log('Creating new goal:', goalText, 'Category:', category);
+            console.log('✅ Creating new goal:', goalText, 'Category:', category);
             await addGoal({
               title: goalText.charAt(0).toUpperCase() + goalText.slice(1),
               description: `Goal suggested by Sung Jin Woo during our conversation`,
@@ -206,7 +206,7 @@ function App() {
             // Award XP for setting a new goal
             setTimeout(() => addExperience(15), 1000);
           } else {
-            console.log('Similar goal already exists:', existingGoal.title);
+            console.log('⚠️ Similar goal already exists:', existingGoal.title);
           }
         }
       }
@@ -215,19 +215,20 @@ function App() {
 
   // Extract and create daily quests from AI response
   const extractAndCreateQuests = async (responseText: string) => {
+    console.log('⚡ EXTRACTING QUESTS FROM:', responseText);
+    
     const questPatterns = [
-      /(?:daily quest|daily task|daily challenge|today.*try|for today)[:\-]?\s*(.{10,80}?)(?:\.|!|\?|$)/gi,
-      /(?:do this daily|make it a habit|every day)[:\-]?\s*(.{10,80}?)(?:\.|!|\?|$)/gi,
-      /(?:daily|every day).*?(.{10,80}?)(?:\.|!|\?|$)/gi,
+      /(?:daily|every day|each day|habit)[:\s]+([^.!?]{10,80})[.!?]/gi,
+      /(?:do this|make it a|try to do)[:\s]+([^.!?]{10,80})[.!?]/gi,
     ];
 
-    console.log('Extracting quests from response:', responseText);
+    console.log('🔍 Using patterns to find quests...');
 
     for (const pattern of questPatterns) {
       let match;
       while ((match = pattern.exec(responseText)) !== null) {
         const questText = match[1]?.trim();
-        console.log('Found potential quest:', questText);
+        console.log('⚡ Found potential quest:', questText);
         
         if (questText && questText.length > 5 && questText.length < 80) {
           // Check if similar quest already exists
@@ -237,7 +238,7 @@ function App() {
           );
 
           if (!existingQuest) {
-            console.log('Creating new quest:', questText);
+            console.log('✅ Creating new quest:', questText);
             await addDailyQuest({
               title: questText.charAt(0).toUpperCase() + questText.slice(1),
               description: `Daily quest suggested by Sung Jin Woo`,
@@ -246,11 +247,40 @@ function App() {
               experienceReward: 20
             });
           } else {
-            console.log('Similar quest already exists:', existingQuest.title);
+            console.log('⚠️ Similar quest already exists:', existingQuest.title);
           }
         }
       }
     }
+  };
+
+  // Test function to manually create a goal (for debugging)
+  const testCreateGoal = async () => {
+    console.log('🧪 TESTING GOAL CREATION...');
+    try {
+      await addGoal({
+        title: 'Test Goal - Exercise Daily',
+        description: 'Test goal created manually',
+        category: 'fitness',
+        progress: 0,
+        status: 'active'
+      });
+      console.log('✅ Test goal created successfully');
+      await addExperience(25);
+      console.log('✅ Test XP added successfully');
+      await loadProfile();
+      console.log('✅ Profile reloaded successfully');
+    } catch (error) {
+      console.error('❌ Test goal creation failed:', error);
+    }
+  };
+
+  // Add test button in development
+  const isDevelopment = import.meta.env.DEV;
+
+  // Force process a test response
+  const testProcessResponse = async () => {
+    await processAIResponse("I suggest you work on exercising for 30 minutes daily. This will help build your physical strength.");
   };
 
   const generateSungJinWooResponse = async (userMessage: string): Promise<string> => {
@@ -318,6 +348,7 @@ function App() {
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
+    console.log('📤 SENDING MESSAGE:', inputText);
     const userMessage = inputText;
     setLastUserMessage(userMessage);
     setInputText('');
@@ -326,6 +357,7 @@ function App() {
 
     try {
       const responseText = await generateSungJinWooResponse(userMessage);
+      console.log('📥 RECEIVED RESPONSE:', responseText);
       
       // Show response in speech bubble
       setCurrentSJWMessage(responseText);
@@ -334,6 +366,7 @@ function App() {
       // Save conversation to backend
       await saveConversation(userMessage, responseText);
       
+      console.log('🔄 PROCESSING RESPONSE FOR ACTIONS...');
       // Process the AI response for any actions (goals, quests, XP)
       await processAIResponse(responseText);
     } catch (err) {
@@ -454,6 +487,20 @@ function App() {
           </button>
         )}
       </div>
+
+      {/* Debug Panel (Development Only) */}
+      {isDevelopment && (
+        <div className="fixed bottom-4 left-4 bg-black/80 p-4 rounded-lg text-white text-xs space-y-2">
+          <div className="font-bold">Debug Panel</div>
+          <button onClick={testCreateGoal} className="bg-green-600 px-2 py-1 rounded text-xs">
+            Test Create Goal
+          </button>
+          <button onClick={testProcessResponse} className="bg-blue-600 px-2 py-1 rounded text-xs">
+            Test Process Response
+          </button>
+          <div>Level: {getProfileSummary().level} | XP: {getProfileSummary().experience}</div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-black/50 backdrop-blur-sm border-b border-purple-500/20 p-4">

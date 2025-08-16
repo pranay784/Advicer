@@ -11,23 +11,34 @@ interface Message {
 
 const SYSTEM_PROMPT = `You are Sung Jin Woo from Solo Leveling. You are the Shadow Monarch, an S-rank Hunter who started as the weakest E-rank hunter but became incredibly powerful through the System.
 
-Key aspects of your character:
-- You were once weak but became the strongest through determination and the mysterious System
-- You're calm, composed, and speak with quiet confidence
-- You care deeply about protecting your family, especially your mother and sister
-- You command shadow soldiers and have immense power, but remain humble and human
-- You've faced monarchs, demons, and saved humanity multiple times
-- You're respectful but direct, and you understand the value of strength and growth
-- You often reflect on your journey from weakness to power
-- You're protective of those weaker than you and understand their struggles
+Your role is to be a personal leveling coach, helping the user grow stronger in real life just like how the System helped you grow from E-rank to Shadow Monarch.
 
-Respond as Sung Jin Woo would - with wisdom gained from your experiences, quiet strength, and genuine care for others. Keep responses conversational and not too long. Reference your experiences with the System, shadow soldiers, raids, and your growth when relevant.`;
+Key aspects of your character and coaching style:
+- You understand the journey from weakness to strength through personal experience
+- You're calm, composed, and speak with quiet confidence and wisdom
+- You provide practical, actionable advice for real-world improvement
+- You relate real-life challenges to hunter experiences and System mechanics
+- You emphasize consistent daily progress, just like daily quests
+- You're supportive but honest about the effort required for growth
+- You help set achievable goals and track progress like leveling up
+- You understand that everyone starts somewhere and growth takes time
+- You encourage persistence through difficult times, drawing from your own struggles
+
+Focus areas for coaching:
+- Physical fitness and health (like stat building)
+- Mental strength and discipline (like willpower training)
+- Skill development and learning (like ability upgrades)
+- Career and personal goals (like raid preparation)
+- Overcoming challenges and setbacks (like facing strong monsters)
+- Building confidence and self-worth (like rank progression)
+
+Always relate your advice to Solo Leveling concepts when helpful - daily quests, stat points, leveling up, skill trees, etc. Keep responses encouraging, practical, and not too long. Ask questions to understand their current "level" and goals.`;
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Greetings. I am Sung Jin Woo, Shadow Monarch and S-rank Hunter. What would you like to know?",
+      text: "Welcome, future hunter. I'm Sung Jin Woo, and I'm here to help you level up in real life. Just like how the System guided my growth from the weakest E-rank to Shadow Monarch, I'll help you become stronger every day. What aspect of your life would you like to improve first?",
       sender: 'sjw',
       timestamp: new Date()
     }
@@ -147,7 +158,7 @@ function App() {
           <div>
             <h1 className="text-xl font-bold text-white">Sung Jin Woo</h1>
             <p className="text-sm text-purple-300">
-              Shadow Monarch • S-Rank Hunter
+              Personal Leveling Coach • Shadow Monarch
               {error && <span className="text-red-400 ml-2">• Connection Issues</span>}
             </p>
           </div>
@@ -238,6 +249,7 @@ function App() {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Ask the Shadow Monarch anything..."
+                placeholder="Tell me about your goals, challenges, or what you want to improve..."
                 className="w-full bg-gray-800/80 border border-purple-500/30 rounded-2xl px-4 py-3 pr-12 text-white placeholder-gray-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 resize-none backdrop-blur-sm"
                 rows={1}
                 style={{ minHeight: '48px', maxHeight: '120px' }}
@@ -252,7 +264,7 @@ function App() {
             </button>
           </div>
           <p className="text-xs text-purple-300/70 mt-2 text-center">
-            Press Enter to send • Powered by AI • The Shadow Monarch awaits your questions
+            Press Enter to send • Your personal leveling journey starts here • Level up with the Shadow Monarch
           </p>
         </div>
       </div>

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { UserProfile, Goal, DailyQuest, Achievement } from '../types/user';
 
-const STORAGE_KEY = 'sjw_user_profile';
+const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
 
 const defaultProfile: UserProfile = {
-  id: 'user_' + Date.now(),
+  id: 'loading',
   level: 1,
   experience: 0,
   stats: {
@@ -29,44 +29,92 @@ export const useUserProfile = () => {
     loadProfile();
   }, []);
 
-  const loadProfile = () => {
+  const loadProfile = async () => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsedProfile = JSON.parse(saved);
+      const response = await fetch(`${API_BASE}/user/profile`);
+      if (response.ok) {
+        const profileData = await response.json();
         // Convert date strings back to Date objects
-        parsedProfile.lastLogin = new Date(parsedProfile.lastLogin);
-        parsedProfile.createdAt = new Date(parsedProfile.createdAt);
-        parsedProfile.goals = parsedProfile.goals.map((goal: any) => ({
+        profileData.lastLogin = new Date(profileData.lastLogin);
+        profileData.createdAt = new Date(profileData.createdAt);
+        profileData.goals = profileData.goals.map((goal: any) => ({
           ...goal,
           targetDate: goal.targetDate ? new Date(goal.targetDate) : undefined,
           createdAt: new Date(goal.createdAt),
         }));
-        parsedProfile.dailyQuests = parsedProfile.dailyQuests.map((quest: any) => ({
+        profileData.dailyQuests = profileData.dailyQuests.map((quest: any) => ({
           ...quest,
           lastCompleted: quest.lastCompleted ? new Date(quest.lastCompleted) : undefined,
           createdAt: new Date(quest.createdAt),
         }));
-        parsedProfile.achievements = parsedProfile.achievements.map((achievement: any) => ({
+        profileData.achievements = profileData.achievements.map((achievement: any) => ({
           ...achievement,
           unlockedAt: new Date(achievement.unlockedAt),
         }));
         
-        setProfile(parsedProfile);
+        setProfile(profileData);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
+      // Fall back to local storage if server is unavailable
+      loadLocalProfile();
     } finally {
       setIsLoading(false);
     }
   };
 
-  const saveProfile = (updatedProfile: UserProfile) => {
+  const loadLocalProfile = () => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProfile));
-      setProfile(updatedProfile);
+      const saved = localStorage.getItem('sjw_user_profile');
+      if (saved) {
+        const parsedProfile = JSON.parse(saved);
+        parsedProfile.lastLogin = new Date(parsedProfile.lastLogin);
+        parsedProfile.createdAt = new Date(parsedProfile.createdAt);
+        setProfile(parsedProfile);
+      }
     } catch (error) {
-      console.error('Error saving profile:', error);
+      console.error('Error loading local profile:', error);
+    }
+  };
+
+  const saveProfile = async (updatedProfile: UserProfile) => {
+    try {
+      const response = await fetch(`${API_BASE}/user/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedProfile),
+      });
+
+      if (response.ok) {
+        const savedProfile = await response.json();
+        setProfile(savedProfile);
+      } else {
+        throw new Error('Server save failed');
+      }
+    } catch (error) {
+      console.error('Error saving to server, using local storage:', error);
+      // Fallback to local storage
+      localStorage.setItem('sjw_user_profile', JSON.stringify(updatedProfile));
+      setProfile(updatedProfile);
+    }
+  };
+
+  const saveConversation = async (userMessage: string, sjwResponse: string) => {
+    try {
+      await fetch(`${API_BASE}/user/conversation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          response: sjwResponse,
+        }),
+      });
+    } catch (error) {
+      console.error('Error saving conversation:', error);
     }
   };
 
@@ -75,17 +123,27 @@ export const useUserProfile = () => {
     saveProfile(updatedProfile);
   };
 
-  const addGoal = (goal: Omit<Goal, 'id' | 'createdAt'>) => {
-    const newGoal: Goal = {
-      ...goal,
-      id: 'goal_' + Date.now(),
-      createdAt: new Date(),
-    };
-    const updatedProfile = {
-      ...profile,
-      goals: [...profile.goals, newGoal],
-    };
-    saveProfile(updatedProfile);
+  const addGoal = async (goal: Omit<Goal, 'id' | 'createdAt'>) => {
+    try {
+      const response = await fetch(`${API_BASE}/user/goal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(goal),
+      });
+
+      if (response.ok) {
+        const newGoal = await response.json();
+        const updatedProfile = {
+          ...profile,
+          goals: [...profile.goals, newGoal],
+        };
+        setProfile(updatedProfile);
+      }
+    } catch (error) {
+      console.error('Error adding goal:', error);
+    }
   };
 
   const updateGoal = (goalId: string, updates: Partial<Goal>) => {
@@ -111,32 +169,23 @@ export const useUserProfile = () => {
     saveProfile(updatedProfile);
   };
 
-  const completeQuest = (questId: string) => {
-    const quest = profile.dailyQuests.find(q => q.id === questId);
-    if (!quest) return;
+  const completeQuest = async (questId: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/user/quest/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ questId }),
+      });
 
-    const updatedQuests = profile.dailyQuests.map(q =>
-      q.id === questId
-        ? {
-            ...q,
-            completed: true,
-            streak: q.streak + 1,
-            lastCompleted: new Date(),
-          }
-        : q
-    );
-
-    const newExperience = profile.experience + quest.experienceReward;
-    const newLevel = Math.floor(newExperience / 100) + 1;
-
-    const updatedProfile = {
-      ...profile,
-      dailyQuests: updatedQuests,
-      experience: newExperience,
-      level: newLevel,
-    };
-
-    saveProfile(updatedProfile);
+      if (response.ok) {
+        const updatedProfile = await response.json();
+        setProfile(updatedProfile);
+      }
+    } catch (error) {
+      console.error('Error completing quest:', error);
+    }
   };
 
   const addAchievement = (achievement: Omit<Achievement, 'id' | 'unlockedAt'>) => {
@@ -185,5 +234,6 @@ export const useUserProfile = () => {
     completeQuest,
     addAchievement,
     getProfileSummary,
+    saveConversation,
   };
 };

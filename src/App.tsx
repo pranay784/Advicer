@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, User, Crown, Sword, MessageCircle } from 'lucide-react';
+import { Send, Crown, Sword, MessageCircle } from 'lucide-react';
 import axios from 'axios';
 import { useUserProfile } from './hooks/useUserProfile';
 import ProfileSetup from './components/ProfileSetup';
@@ -7,13 +7,6 @@ import UserStats from './components/UserStats';
 import SungJinWooAvatar from './components/SungJinWooAvatar';
 import SpeechBubble from './components/SpeechBubble';
 import { UserProfile } from './types/user';
-
-interface Message {
-  id: string;
-  text: string;
-  sender: 'user' | 'sjw';
-  timestamp: Date;
-}
 
 const createSystemPrompt = (userProfile: UserProfile, profileSummary: any) => `You are Sung Jin Woo from Solo Leveling. You are the Shadow Monarch, an S-rank Hunter who started as the weakest E-rank hunter but became incredibly powerful through the System.
 
@@ -52,16 +45,14 @@ Focus areas for coaching:
 Always relate your advice to Solo Leveling concepts when helpful - daily quests, stat points, leveling up, skill trees, etc. Keep responses encouraging, practical, and not too long. Reference their specific progress and goals to show you're tracking their journey.`;
 
 function App() {
-  const { profile, isLoading, updateProfile, getProfileSummary } = useUserProfile();
+  const { profile, isLoading, updateProfile, getProfileSummary, saveConversation } = useUserProfile();
   const [showProfileSetup, setShowProfileSetup] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-  ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [currentSJWMessage, setCurrentSJWMessage] = useState<string>('');
   const [showSpeechBubble, setShowSpeechBubble] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [lastUserMessage, setLastUserMessage] = useState<string>('');
 
   useEffect(() => {
     if (!isLoading) {
@@ -70,13 +61,6 @@ function App() {
       const profileSummary = getProfileSummary();
       
       if (isNewUser) {
-        setMessages([{
-          id: '1',
-          text: "Welcome, future hunter. I'm Sung Jin Woo, and I'm here to help you level up in real life. Just like how the System guided my growth from the weakest E-rank to Shadow Monarch, I'll help you become stronger every day. Would you like me to understand your current situation better so I can provide personalized guidance?",
-          sender: 'sjw',
-          timestamp: new Date()
-        }]);
-        
         // Show initial message in speech bubble
         setTimeout(() => {
           setCurrentSJWMessage("Welcome, future hunter. I'm Sung Jin Woo, and I'm here to help you level up in real life. Just like how the System guided my growth from the weakest E-rank to Shadow Monarch, I'll help you become stronger every day. Would you like me to understand your current situation better so I can provide personalized guidance?");
@@ -101,13 +85,6 @@ function App() {
         
         welcomeMessage += ` How can I help you level up today?`;
         
-        setMessages([{
-          id: '1',
-          text: welcomeMessage,
-          sender: 'sjw',
-          timestamp: new Date()
-        }]);
-        
         // Show welcome message in speech bubble
         setTimeout(() => {
           setCurrentSJWMessage(welcomeMessage);
@@ -116,14 +93,6 @@ function App() {
       }
     }
   }, [isLoading, profile]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   const generateSungJinWooResponse = async (userMessage: string): Promise<string> => {
     try {
@@ -190,33 +159,21 @@ function App() {
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: inputText,
-      sender: 'user',
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
+    const userMessage = inputText;
+    setLastUserMessage(userMessage);
     setInputText('');
     setIsTyping(true);
     setError(null);
 
     try {
-      const responseText = await generateSungJinWooResponse(inputText);
-      
-      const sjwMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: responseText,
-        sender: 'sjw',
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, sjwMessage]);
+      const responseText = await generateSungJinWooResponse(userMessage);
       
       // Show response in speech bubble
       setCurrentSJWMessage(responseText);
       setShowSpeechBubble(true);
+      
+      // Save conversation to backend
+      await saveConversation(userMessage, responseText);
     } catch (err) {
       setError('Failed to get response from Sung Jin Woo. Please try again.');
     } finally {
@@ -240,16 +197,10 @@ function App() {
     setShowProfileSetup(false);
     
     // Add a personalized welcome message
-    const welcomeMessage: Message = {
-      id: Date.now().toString(),
-      text: `Perfect, ${profileData.name || 'Hunter'}! I now understand your goals better. Based on what you've told me, I'll help you create a personalized leveling plan. Think of me as your personal System - I'll track your progress, suggest daily quests, and help you overcome the challenges you mentioned. Ready to begin your transformation?`,
-      sender: 'sjw',
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, welcomeMessage]);
+    const welcomeMessage = `Perfect, ${profileData.name || 'Hunter'}! I now understand your goals better. Based on what you've told me, I'll help you create a personalized leveling plan. Think of me as your personal System - I'll track your progress, suggest daily quests, and help you overcome the challenges you mentioned. Ready to begin your transformation?`;
     
     // Show setup completion message in speech bubble
-    setCurrentSJWMessage(welcomeMessage.text);
+    setCurrentSJWMessage(welcomeMessage);
     setShowSpeechBubble(true);
   };
 
@@ -342,66 +293,21 @@ function App() {
         <UserStats />
       </div>
 
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="max-w-4xl mx-auto space-y-6 pr-32">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-4 duration-300`}
-            >
-              <div className={`flex items-end space-x-3 max-w-xs sm:max-w-md lg:max-w-lg ${
-                message.sender === 'user' ? 'flex-row-reverse space-x-reverse' : 'flex-row'
-              }`}>
-                {/* Avatar */}
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg ${
-                  message.sender === 'user' 
-                    ? 'bg-gradient-to-br from-blue-500 to-cyan-500' 
-                    : 'bg-gradient-to-br from-purple-600 to-blue-600'
-                }`}>
-                  {message.sender === 'user' ? (
-                    <User className="w-5 h-5 text-white" />
-                  ) : (
-                    <Crown className="w-5 h-5 text-white" />
-                  )}
-                </div>
-
-                {/* Message Bubble */}
-                <div className={`rounded-2xl px-4 py-3 shadow-xl backdrop-blur-sm ${
-                  message.sender === 'user'
-                    ? 'bg-gradient-to-br from-blue-600 to-cyan-600 text-white rounded-br-sm'
-                    : 'bg-black/60 text-gray-100 border border-purple-500/20 rounded-bl-sm'
-                }`}>
-                  <p className="text-sm leading-relaxed">{message.text}</p>
-                  <p className={`text-xs mt-2 ${
-                    message.sender === 'user' ? 'text-blue-100' : 'text-purple-300'
-                  }`}>
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
+      {/* Main Content Area - Show last user message if available */}
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="max-w-4xl mx-auto pr-32 text-center">
+          {lastUserMessage ? (
+            <div className="bg-black/30 backdrop-blur-sm border border-blue-500/20 rounded-xl p-6 mb-4">
+              <h3 className="text-blue-300 font-semibold mb-2">Your Last Message:</h3>
+              <p className="text-white">{lastUserMessage}</p>
             </div>
-          ))}
-
-          {/* Typing Indicator */}
-          {isTyping && (
-            <div className="flex justify-start animate-in slide-in-from-bottom-4 duration-300">
-              <div className="flex items-end space-x-3 max-w-xs">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-lg">
-                  <Crown className="w-5 h-5 text-white" />
-                </div>
-                <div className="bg-black/60 border border-purple-500/20 rounded-2xl rounded-bl-sm px-4 py-3 shadow-xl backdrop-blur-sm">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                  </div>
-                </div>
-              </div>
+          ) : (
+            <div className="text-center text-purple-300/70">
+              <Crown className="w-16 h-16 mx-auto mb-4 text-purple-400/50" />
+              <p className="text-lg mb-2">Ready to level up, Hunter?</p>
+              <p className="text-sm">Start a conversation with your Shadow Monarch coach</p>
             </div>
           )}
-
-          <div ref={messagesEndRef} />
         </div>
       </div>
 
@@ -438,7 +344,7 @@ function App() {
             </button>
           </div>
           <p className="text-xs text-purple-300/70 mt-2 text-center">
-            Press Enter to send • Your personal leveling journey • Level {getProfileSummary().level} • {getProfileSummary().experience} XP
+            Press Enter to send • Level {getProfileSummary().level} • {getProfileSummary().experience} XP • IP-based auto-save
           </p>
         </div>
       </div>

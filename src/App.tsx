@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, User, Crown, Sword } from 'lucide-react';
 import axios from 'axios';
+import { useUserProfile } from './hooks/useUserProfile';
+import ProfileSetup from './components/ProfileSetup';
+import UserStats from './components/UserStats';
+import { UserProfile } from './types/user';
 
 interface Message {
   id: string;
@@ -9,9 +13,20 @@ interface Message {
   timestamp: Date;
 }
 
-const SYSTEM_PROMPT = `You are Sung Jin Woo from Solo Leveling. You are the Shadow Monarch, an S-rank Hunter who started as the weakest E-rank hunter but became incredibly powerful through the System.
+const createSystemPrompt = (userProfile: UserProfile, profileSummary: any) => `You are Sung Jin Woo from Solo Leveling. You are the Shadow Monarch, an S-rank Hunter who started as the weakest E-rank hunter but became incredibly powerful through the System.
 
 Your role is to be a personal leveling coach, helping the user grow stronger in real life just like how the System helped you grow from E-rank to Shadow Monarch.
+
+IMPORTANT USER CONTEXT:
+- User Name: ${userProfile.name || 'Hunter'}
+- Current Level: ${profileSummary.level}
+- Experience: ${profileSummary.experience} XP
+- Active Goals: ${userProfile.goals.filter(g => g.status === 'active').map(g => g.title).join(', ') || 'None set yet'}
+- Daily Quests: ${userProfile.dailyQuests.length} total, ${profileSummary.completedToday} completed today
+- Days on Journey: ${profileSummary.daysSinceStart}
+- Recent Progress: ${userProfile.goals.map(g => `${g.title}: ${g.progress}%`).join(', ') || 'Just starting'}
+
+Use this information to provide personalized advice and track their progress. Reference their specific goals and current level when giving guidance.
 
 Key aspects of your character and coaching style:
 - You understand the journey from weakness to strength through personal experience
@@ -32,21 +47,59 @@ Focus areas for coaching:
 - Overcoming challenges and setbacks (like facing strong monsters)
 - Building confidence and self-worth (like rank progression)
 
-Always relate your advice to Solo Leveling concepts when helpful - daily quests, stat points, leveling up, skill trees, etc. Keep responses encouraging, practical, and not too long. Ask questions to understand their current "level" and goals.`;
+Always relate your advice to Solo Leveling concepts when helpful - daily quests, stat points, leveling up, skill trees, etc. Keep responses encouraging, practical, and not too long. Reference their specific progress and goals to show you're tracking their journey.`;
 
 function App() {
+  const { profile, isLoading, updateProfile, getProfileSummary } = useUserProfile();
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: "Welcome, future hunter. I'm Sung Jin Woo, and I'm here to help you level up in real life. Just like how the System guided my growth from the weakest E-rank to Shadow Monarch, I'll help you become stronger every day. What aspect of your life would you like to improve first?",
-      sender: 'sjw',
-      timestamp: new Date()
-    }
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isLoading) {
+      // Check if this is a new user or returning user
+      const isNewUser = profile.goals.length === 0 && profile.dailyQuests.length === 0;
+      const profileSummary = getProfileSummary();
+      
+      if (isNewUser) {
+        setMessages([{
+          id: '1',
+          text: "Welcome, future hunter. I'm Sung Jin Woo, and I'm here to help you level up in real life. Just like how the System guided my growth from the weakest E-rank to Shadow Monarch, I'll help you become stronger every day. Would you like me to understand your current situation better so I can provide personalized guidance?",
+          sender: 'sjw',
+          timestamp: new Date()
+        }]);
+      } else {
+        // Returning user - personalized welcome
+        const daysSince = Math.floor((Date.now() - profile.lastLogin.getTime()) / (1000 * 60 * 60 * 24));
+        let welcomeMessage = `Welcome back, ${profile.name || 'Hunter'}! `;
+        
+        if (daysSince === 0) {
+          welcomeMessage += `Good to see you again today. You're currently Level ${profileSummary.level} with ${profileSummary.experience} XP.`;
+        } else if (daysSince === 1) {
+          welcomeMessage += `I see you were here yesterday. You're Level ${profileSummary.level} - let's continue building your strength.`;
+        } else {
+          welcomeMessage += `It's been ${daysSince} days since our last session. You're Level ${profileSummary.level}. Ready to get back on track?`;
+        }
+        
+        if (profileSummary.activeGoals > 0) {
+          welcomeMessage += ` You have ${profileSummary.activeGoals} active goals we're working on.`;
+        }
+        
+        welcomeMessage += ` How can I help you level up today?`;
+        
+        setMessages([{
+          id: '1',
+          text: welcomeMessage,
+          sender: 'sjw',
+          timestamp: new Date()
+        }]);
+      }
+    }
+  }, [isLoading, profile]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -59,6 +112,7 @@ function App() {
   const generateSungJinWooResponse = async (userMessage: string): Promise<string> => {
     try {
       const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
+      const profileSummary = getProfileSummary();
       
       if (!apiKey) {
         throw new Error('OpenRouter API key not found. Please add your API key to the .env file.');
@@ -71,7 +125,7 @@ function App() {
           messages: [
             {
               role: 'system',
-              content: SYSTEM_PROMPT
+              content: createSystemPrompt(profile, profileSummary)
             },
             {
               role: 'user',
@@ -147,8 +201,46 @@ function App() {
     }
   };
 
+  const handleProfileSetupComplete = (profileData: any) => {
+    // Update profile with setup data
+    updateProfile({
+      name: profileData.name,
+      // You can add logic here to convert setup data to goals/quests
+    });
+    setShowProfileSetup(false);
+    
+    // Add a personalized welcome message
+    const welcomeMessage: Message = {
+      id: Date.now().toString(),
+      text: `Perfect, ${profileData.name || 'Hunter'}! I now understand your goals better. Based on what you've told me, I'll help you create a personalized leveling plan. Think of me as your personal System - I'll track your progress, suggest daily quests, and help you overcome the challenges you mentioned. Ready to begin your transformation?`,
+      sender: 'sjw',
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, welcomeMessage]);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center mx-auto mb-4 animate-pulse">
+            <Crown className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-purple-300">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex flex-col">
+      {showProfileSetup && (
+        <ProfileSetup
+          onComplete={handleProfileSetupComplete}
+          onSkip={() => setShowProfileSetup(false)}
+        />
+      )}
+
       {/* Header */}
       <div className="bg-black/50 backdrop-blur-sm border-b border-purple-500/20 p-4">
         <div className="max-w-4xl mx-auto flex items-center space-x-4">
@@ -158,13 +250,25 @@ function App() {
           <div>
             <h1 className="text-xl font-bold text-white">Sung Jin Woo</h1>
             <p className="text-sm text-purple-300">
-              Personal Leveling Coach • Shadow Monarch
+              Personal Leveling Coach • Shadow Monarch • Level {getProfileSummary().level}
               {error && <span className="text-red-400 ml-2">• Connection Issues</span>}
             </p>
           </div>
-          <div className="flex-1"></div>
+          <div className="flex-1 flex justify-end items-center space-x-2">
+            <button
+              onClick={() => setShowProfileSetup(true)}
+              className="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 px-3 py-1 rounded-full transition-colors"
+            >
+              Update Profile
+            </button>
+          </div>
           <Sword className="w-6 h-6 text-purple-400" />
         </div>
+      </div>
+
+      {/* User Stats */}
+      <div className="max-w-4xl mx-auto w-full px-4 pt-4">
+        <UserStats />
       </div>
 
       {/* Chat Messages */}
@@ -248,7 +352,6 @@ function App() {
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask the Shadow Monarch anything..."
                 placeholder="Tell me about your goals, challenges, or what you want to improve..."
                 className="w-full bg-gray-800/80 border border-purple-500/30 rounded-2xl px-4 py-3 pr-12 text-white placeholder-gray-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 resize-none backdrop-blur-sm"
                 rows={1}
@@ -264,7 +367,7 @@ function App() {
             </button>
           </div>
           <p className="text-xs text-purple-300/70 mt-2 text-center">
-            Press Enter to send • Your personal leveling journey starts here • Level up with the Shadow Monarch
+            Press Enter to send • Your personal leveling journey • Level {getProfileSummary().level} • {getProfileSummary().experience} XP
           </p>
         </div>
       </div>

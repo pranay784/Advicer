@@ -290,14 +290,18 @@ function App() {
       const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
       const profileSummary = getProfileSummary();
       
+      console.log('🔑 API Key exists:', !!apiKey);
+      console.log('📤 Making OpenRouter API call...');
+      
       if (!apiKey) {
-        return "I sense that my connection to the System is not properly configured. Please make sure your OpenRouter API key is set up in your environment variables. Without it, I cannot access my full powers to guide you.";
+        console.error('❌ No API key found');
+        return "I sense that my connection to the System is not properly configured. Please make sure your OpenRouter API key is set up in your .env file as VITE_OPENROUTER_API_KEY=your_key_here";
       }
 
       const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
         {
-          model: 'anthropic/claude-3.5-sonnet',
+          model: 'anthropic/claude-3.5-sonnet:beta',
           messages: [
             {
               role: 'system',
@@ -308,39 +312,52 @@ function App() {
               content: userMessage
             }
           ],
-          max_tokens: 200,
-          temperature: 0.7
+          max_tokens: 300,
+          temperature: 0.8,
+          top_p: 1,
+          frequency_penalty: 0,
+          presence_penalty: 0
         },
         {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': window.location.origin,
-            'X-Title': 'Sung Jin Woo Chatbot'
+            'HTTP-Referer': 'https://bolt.new',
+            'X-Title': 'Sung Jin Woo Leveling Coach'
           }
         }
       );
 
+      console.log('✅ OpenRouter API response received:', response.data);
       return response.data.choices[0].message.content;
     } catch (error) {
       console.error('Error generating response:', error);
+      console.error('Full error details:', error.response?.data);
       
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 401) {
-          return "The System is rejecting my access - it seems the API key is invalid. Please check your OpenRouter API key configuration.";
+          console.error('❌ 401 Unauthorized - Invalid API key');
+          return "The System is rejecting my access - your OpenRouter API key appears to be invalid. Please check your .env file and make sure VITE_OPENROUTER_API_KEY is set correctly.";
         } else if (error.response?.status === 429) {
+          console.error('❌ 429 Rate Limited');
           return "I'm being rate limited by the System. Please wait a moment before trying again.";
+        } else if (error.response?.status === 402) {
+          console.error('❌ 402 Payment Required - No credits');
+          return "The System requires payment - your OpenRouter account appears to be out of credits. Please add credits to your OpenRouter account.";
         } else if (error.code === 'NETWORK_ERROR' || !navigator.onLine) {
+          console.error('❌ Network error');
           return "I'm having trouble connecting to the System. Please check your internet connection and try again.";
+        } else {
+          console.error('❌ Other API error:', error.response?.status, error.response?.data);
+          return `The System encountered an error (${error.response?.status}). Please try again or check your OpenRouter account.`;
         }
       }
       
       // Fallback responses if API fails
       const fallbackResponses = [
-        "I sense something interfering with our connection. Let me try again - what did you want to discuss?",
-        "The shadows seem restless today. Could you repeat your question?",
-        "My connection to the System feels unstable. Please try asking again.",
-        "Something's blocking our communication. What were you saying?"
+        "I sense something interfering with our connection to the System. The OpenRouter API might be having issues - please try again.",
+        "The shadows seem restless today. There's a problem with the API connection - could you repeat your question?",
+        "My connection to the System feels unstable. Please check your API key and try asking again."
       ];
       
       return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
@@ -351,6 +368,7 @@ function App() {
     if (!inputText.trim()) return;
 
     console.log('📤 SENDING MESSAGE:', inputText);
+    console.log('🔍 Checking API key...', !!import.meta.env.VITE_OPENROUTER_API_KEY);
     const userMessage = inputText;
     setLastUserMessage(userMessage);
     setInputText('');
@@ -358,6 +376,7 @@ function App() {
     setError(null);
 
     try {
+      console.log('🤖 Calling OpenRouter API...');
       const responseText = await generateSungJinWooResponse(userMessage);
       console.log('📥 RECEIVED RESPONSE:', responseText);
       
@@ -372,6 +391,7 @@ function App() {
       // Process the AI response for any actions (goals, quests, XP)
       await processAIResponse(responseText);
     } catch (err) {
+      console.error('❌ Error in handleSendMessage:', err);
       setError('Failed to get response from Sung Jin Woo. Please try again.');
     } finally {
       setIsTyping(false);

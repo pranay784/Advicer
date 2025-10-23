@@ -46,7 +46,7 @@ export interface Achievement {
   title: string;
   description: string;
   icon: string;
-  unlockedAt: Date;
+  unlockedDate: Date;
 }
 
 export interface ProgressUpdate {

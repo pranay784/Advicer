@@ -54,13 +54,13 @@ app.get('/api/user/profile', async (req, res) => {
       .from('users')
       .select('*')
       .eq('name', userIp) // Using name field temporarily to store IP
-      .single();
+      .limit(1); // Use limit(1) to handle potential duplicate IPs
     
     if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
       throw fetchError;
     }
     
-    if (!existingUser) {
+    if (!existingUser || existingUser.length === 0) { // Check if any user was found
       // Create new user
       const defaultProfile = createDefaultProfile();
       defaultProfile.name = userIp; // Temporary IP storage
@@ -79,13 +79,13 @@ app.get('/api/user/profile', async (req, res) => {
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
         .update({ last_login: new Date().toISOString() })
-        .eq('id', existingUser.id)
+        .eq('id', existingUser[0].id) // Access the first user's ID
         .select()
         .single();
         
       if (updateError) throw updateError;
       
-      res.json(updatedUser);
+      res.json(existingUser[0]); // Return the first user found
     }
   } catch (error) {
     console.error('Error loading profile:', error);
@@ -102,11 +102,9 @@ app.post('/api/user/profile', async (req, res) => {
       .from('users')
       .select('*')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Update user profile
     const updateData = { 
@@ -116,8 +114,7 @@ app.post('/api/user/profile', async (req, res) => {
     
     const { data: updatedUser, error: updateError } = await supabase
       .from('users')
-      .update(updateData)
-      .eq('id', existingUser.id)
+      .update(updateData).eq('id', existingUser[0].id) // Access the first user's ID
       .select()
       .single();
       
@@ -140,11 +137,9 @@ app.post('/api/user/experience', async (req, res) => {
       .from('users')
       .select('*')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Add experience and calculate new level
     const newExperience = existingUser.experience + amount;
@@ -157,7 +152,7 @@ app.post('/api/user/experience', async (req, res) => {
         level: newLevel,
         last_login: new Date().toISOString()
       })
-      .eq('id', existingUser.id)
+      .eq('id', existingUser[0].id) // Access the first user's ID
       .select()
       .single();
       
@@ -180,17 +175,15 @@ app.post('/api/user/conversation', async (req, res) => {
       .from('users')
       .select('id')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Insert conversation into history
     const { error: insertError } = await supabase
       .from('conversation_history')
       .insert([{
-        user_id: existingUser.id,
+        user_id: existingUser[0].id, // Access the first user's ID
         user_message: message,
         sjw_response: response
       }]);
@@ -200,8 +193,7 @@ app.post('/api/user/conversation', async (req, res) => {
     // Update last login
     await supabase
       .from('users')
-      .update({ last_login: new Date().toISOString() })
-      .eq('id', existingUser.id);
+      .update({ last_login: new Date().toISOString() }).eq('id', existingUser[0].id);
     
     res.json({ success: true });
   } catch (error) {
@@ -219,17 +211,15 @@ app.post('/api/user/goal', async (req, res) => {
       .from('users')
       .select('id')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Insert new goal
     const { data: newGoal, error: insertError } = await supabase
       .from('goals')
       .insert([{
-        user_id: existingUser.id,
+        user_id: existingUser[0].id, // Access the first user's ID
         ...req.body
       }])
       .select()
@@ -240,8 +230,7 @@ app.post('/api/user/goal', async (req, res) => {
     // Update last login
     await supabase
       .from('users')
-      .update({ last_login: new Date().toISOString() })
-      .eq('id', existingUser.id);
+      .update({ last_login: new Date().toISOString() }).eq('id', existingUser[0].id);
     
     res.json(newGoal);
   } catch (error) {
@@ -260,18 +249,16 @@ app.put('/api/user/goal/:goalId', async (req, res) => {
       .from('users')
       .select('id')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Update goal
     const { data: updatedGoal, error: updateError } = await supabase
       .from('goals')
       .update(req.body)
       .eq('id', goalId)
-      .eq('user_id', existingUser.id)
+      .eq('user_id', existingUser[0].id) // Access the first user's ID
       .select()
       .single();
       
@@ -284,8 +271,7 @@ app.put('/api/user/goal/:goalId', async (req, res) => {
     // Update last login
     await supabase
       .from('users')
-      .update({ last_login: new Date().toISOString() })
-      .eq('id', existingUser.id);
+      .update({ last_login: new Date().toISOString() }).eq('id', existingUser[0].id);
     
     res.json(updatedGoal);
   } catch (error) {
@@ -303,15 +289,13 @@ app.post('/api/user/quest', async (req, res) => {
       .from('users')
       .select('id')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Insert new quest
     const questData = {
-      user_id: existingUser.id,
+      user_id: existingUser[0].id, // Access the first user's ID
       ...req.body,
       completed: false,
       streak: 0
@@ -328,8 +312,7 @@ app.post('/api/user/quest', async (req, res) => {
     // Update last login
     await supabase
       .from('users')
-      .update({ last_login: new Date().toISOString() })
-      .eq('id', existingUser.id);
+      .update({ last_login: new Date().toISOString() }).eq('id', existingUser[0].id);
     
     res.json(newQuest);
   } catch (error) {
@@ -348,18 +331,16 @@ app.post('/api/user/quest/complete', async (req, res) => {
       .from('users')
       .select('*')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Get quest details
     const { data: quest, error: questError } = await supabase
       .from('daily_quests')
       .select('*')
       .eq('id', questId)
-      .eq('user_id', existingUser.id)
+      .eq('user_id', existingUser[0].id) // Access the first user's ID
       .single();
       
     if (questError || !quest) {
@@ -387,7 +368,7 @@ app.post('/api/user/quest/complete', async (req, res) => {
         level: newLevel,
         last_login: new Date().toISOString()
       })
-      .eq('id', existingUser.id)
+      .eq('id', existingUser[0].id) // Access the first user's ID
       .select()
       .single();
       
@@ -409,19 +390,17 @@ app.post('/api/user/achievement', async (req, res) => {
       .from('users')
       .select('id')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Insert new achievement
     const { data: newAchievement, error: insertError } = await supabase
       .from('achievements')
       .insert([{
-        user_id: existingUser.id,
+        user_id: existingUser[0].id, // Access the first user's ID
         ...req.body
-      }])
+      }, { unlocked_date: new Date().toISOString() }]) // Use unlocked_date
       .select()
       .single();
       
@@ -430,8 +409,7 @@ app.post('/api/user/achievement', async (req, res) => {
     // Update last login
     await supabase
       .from('users')
-      .update({ last_login: new Date().toISOString() })
-      .eq('id', existingUser.id);
+      .update({ last_login: new Date().toISOString() }).eq('id', existingUser[0].id);
     
     res.json(newAchievement);
   } catch (error) {
@@ -450,17 +428,15 @@ app.get('/api/user/goals', async (req, res) => {
       .from('users')
       .select('id')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Get user's goals
     const { data: goals, error: goalsError } = await supabase
       .from('goals')
       .select('*')
-      .eq('user_id', existingUser.id)
+      .eq('user_id', existingUser[0].id) // Access the first user's ID
       .order('created_at', { ascending: false });
       
     if (goalsError) throw goalsError;
@@ -482,17 +458,15 @@ app.get('/api/user/quests', async (req, res) => {
       .from('users')
       .select('id')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Get user's quests
     const { data: quests, error: questsError } = await supabase
       .from('daily_quests')
       .select('*')
-      .eq('user_id', existingUser.id)
+      .eq('user_id', existingUser[0].id) // Access the first user's ID
       .order('created_at', { ascending: false });
       
     if (questsError) throw questsError;
@@ -514,18 +488,16 @@ app.get('/api/user/achievements', async (req, res) => {
       .from('users')
       .select('id')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Get user's achievements
     const { data: achievements, error: achievementsError } = await supabase
       .from('achievements')
       .select('*')
-      .eq('user_id', existingUser.id)
-      .order('unlocked_at', { ascending: false });
+      .eq('user_id', existingUser[0].id) // Access the first user's ID
+      .order('unlocked_date', { ascending: false }); // Use unlocked_date
       
     if (achievementsError) throw achievementsError;
     
@@ -567,15 +539,13 @@ app.post('/api/user/quest', async (req, res) => {
       .from('users')
       .select('id')
       .eq('name', userIp)
-      .single();
+      .limit(1); // Use limit(1)
       
-    if (fetchError) {
-      throw fetchError;
-    }
+    if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
     
     // Insert new quest
     const questData = {
-      user_id: existingUser.id,
+      user_id: existingUser[0].id, // Access the first user's ID
       ...req.body,
       completed: false,
       streak: 0
@@ -592,8 +562,7 @@ app.post('/api/user/quest', async (req, res) => {
     // Update last login
     await supabase
       .from('users')
-      .update({ last_login: new Date().toISOString() })
-      .eq('id', existingUser.id);
+      .update({ last_login: new Date().toISOString() }).eq('id', existingUser[0].id);
     
     res.json(newQuest);
   } catch (error) {
@@ -626,7 +595,7 @@ app.post('/api/user/quest/complete', async (req, res) => {
     // Complete quest and award XP
     quest.completed = true;
     quest.streak = (quest.streak || 0) + 1;
-    quest.lastCompleted = new Date().toISOString();
+    quest.lastCompleted = new Date().toISOString(); // This is for local file system, not Supabase
     
     users[userId].experience += quest.experienceReward || 10;
     users[userId].level = Math.floor(users[userId].experience / 100) + 1;
@@ -654,7 +623,7 @@ app.post('/api/user/achievement', async (req, res) => {
     const newAchievement = {
       id: 'achievement_' + Date.now(),
       ...req.body,
-      unlockedAt: new Date().toISOString()
+      unlockedDate: new Date().toISOString() // Use unlockedDate for local file system
     };
     
     users[userId].achievements.push(newAchievement);

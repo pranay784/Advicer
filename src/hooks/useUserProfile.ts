@@ -44,15 +44,15 @@ export const useUserProfile = () => {
         .from('users')
         .select('*')
         .eq('name', userIp)
-        .single();
+        .limit(1); // Use limit(1) to handle potential duplicate IPs
       
       if (fetchError && fetchError.code !== 'PGRST116') {
         throw fetchError;
       }
       
-      let userData;
+      let userData = existingUser ? existingUser[0] : null; // Get the first user if found
       
-      if (!existingUser) {
+      if (!userData) {
         // Create new user
         const { data: newUser, error: insertError } = await supabase
           .from('users')
@@ -180,7 +180,7 @@ export const useUserProfile = () => {
       title: achievement.title,
       description: achievement.description || '',
       icon: achievement.icon || '',
-      unlockedAt: new Date(achievement.unlocked_at),
+      unlockedDate: new Date(achievement.unlocked_date), // Use unlocked_date as hinted by Supabase
     }));
   };
 
@@ -205,9 +205,9 @@ export const useUserProfile = () => {
         .from('users')
         .select('id')
         .eq('name', userIp)
-        .single();
+        .limit(1); // Use limit(1)
         
-      if (fetchError) throw fetchError;
+      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
       
       // Update user profile
       const { data: updatedUser, error: updateError } = await supabase
@@ -223,7 +223,7 @@ export const useUserProfile = () => {
           willpower: updatedProfile.stats.willpower,
           last_login: new Date().toISOString()
         })
-        .eq('id', existingUser.id)
+        .eq('id', existingUser[0].id) // Access the first user's ID
         .select()
         .single();
         
@@ -245,14 +245,14 @@ export const useUserProfile = () => {
         .from('users')
         .select('id')
         .eq('name', userIp)
-        .single();
+        .limit(1); // Use limit(1)
         
-      if (fetchError) throw fetchError;
+      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
       
       // Insert conversation into history
       const { error: insertError } = await supabase
         .from('conversation_history')
-        .insert([{
+          user_id: existingUser[0].id, // Access the first user's ID
           user_id: existingUser.id,
           user_message: userMessage,
           sjw_response: sjwResponse
@@ -263,8 +263,7 @@ export const useUserProfile = () => {
       // Update last login
       await supabase
         .from('users')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', existingUser.id);
+        .update({ last_login: new Date().toISOString() }).eq('id', existingUser[0].id);
     } catch (error) {
       console.error('Error saving conversation:', error);
     }
@@ -284,9 +283,9 @@ export const useUserProfile = () => {
         .from('users')
         .select('*')
         .eq('name', userIp)
-        .single();
+        .limit(1); // Use limit(1)
         
-      if (fetchError) throw fetchError;
+      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
       
       // Add experience and calculate new level
       const newExperience = existingUser.experience + amount;
@@ -299,7 +298,7 @@ export const useUserProfile = () => {
           level: newLevel,
           last_login: new Date().toISOString()
         })
-        .eq('id', existingUser.id)
+        .eq('id', existingUser[0].id) // Access the first user's ID
         .select()
         .single();
         
@@ -322,14 +321,14 @@ export const useUserProfile = () => {
         .from('users')
         .select('id')
         .eq('name', userIp)
-        .single();
+        .limit(1); // Use limit(1)
         
-      if (fetchError) throw fetchError;
+      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
       
       // Insert new goal
       const { data: newGoal, error: insertError } = await supabase
         .from('goals')
-        .insert([{
+          user_id: existingUser[0].id, // Access the first user's ID
           user_id: existingUser.id,
           title: goal.title,
           description: goal.description,
@@ -359,9 +358,9 @@ export const useUserProfile = () => {
         .from('users')
         .select('id')
         .eq('name', userIp)
-        .single();
+        .limit(1); // Use limit(1)
         
-      if (fetchError) throw fetchError;
+      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
       
       // Update goal
       const { data: updatedGoal, error: updateError } = await supabase
@@ -375,7 +374,7 @@ export const useUserProfile = () => {
           status: updates.status
         })
         .eq('id', goalId)
-        .eq('user_id', existingUser.id)
+        .eq('user_id', existingUser[0].id) // Access the first user's ID
         .select()
         .single();
         
@@ -401,14 +400,14 @@ export const useUserProfile = () => {
         .from('users')
         .select('id')
         .eq('name', userIp)
-        .single();
+        .limit(1); // Use limit(1)
         
-      if (fetchError) throw fetchError;
+      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
       
       // Insert new quest
       const { data: newQuest, error: insertError } = await supabase
         .from('daily_quests')
-        .insert([{
+          user_id: existingUser[0].id, // Access the first user's ID
           user_id: existingUser.id,
           title: quest.title,
           description: quest.description,
@@ -439,16 +438,16 @@ export const useUserProfile = () => {
         .from('users')
         .select('*')
         .eq('name', userIp)
-        .single();
+        .limit(1); // Use limit(1)
         
-      if (fetchError) throw fetchError;
+      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
       
       // Get quest details
       const { data: quest, error: questError } = await supabase
         .from('daily_quests')
         .select('*')
         .eq('id', questId)
-        .eq('user_id', existingUser.id)
+        .eq('user_id', existingUser[0].id) // Access the first user's ID
         .single();
         
       if (questError || !quest) {
@@ -476,7 +475,7 @@ export const useUserProfile = () => {
           level: newLevel,
           last_login: new Date().toISOString()
         })
-        .eq('id', existingUser.id);
+        .eq('id', existingUser[0].id); // Access the first user's ID
       
       // Reload profile to get updated data
       await loadProfile();
@@ -485,7 +484,7 @@ export const useUserProfile = () => {
     }
   };
 
-  const addAchievement = async (achievement: Omit<Achievement, 'id' | 'unlockedAt'>) => {
+  const addAchievement = async (achievement: Omit<Achievement, 'id' | 'unlockedDate'>) => {
     try {
       const userIp = await getUserIP();
       
@@ -494,15 +493,15 @@ export const useUserProfile = () => {
         .from('users')
         .select('id')
         .eq('name', userIp)
-        .single();
+        .limit(1); // Use limit(1)
         
-      if (fetchError) throw fetchError;
+      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
       
       // Insert new achievement
       const { data: newAchievement, error: insertError } = await supabase
         .from('achievements')
         .insert([{
-          user_id: existingUser.id,
+          user_id: existingUser[0].id, // Access the first user's ID
           title: achievement.title,
           description: achievement.description,
           icon: achievement.icon

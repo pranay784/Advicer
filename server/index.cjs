@@ -16,8 +16,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+console.log('Environment variables check:');
+console.log('SUPABASE_URL exists:', !!supabaseUrl);
+console.log('SUPABASE_SERVICE_ROLE_KEY exists:', !!supabaseServiceKey);
+console.log('SUPABASE_URL value:', supabaseUrl ? 'SET' : 'NOT SET');
+console.log('SUPABASE_SERVICE_ROLE_KEY value:', supabaseServiceKey ? 'SET' : 'NOT SET');
+
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Missing Supabase environment variables. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+  console.error('Missing Supabase environment variables.');
+  console.error('SUPABASE_URL:', supabaseUrl || 'NOT SET');
+  console.error('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey || 'NOT SET');
+  console.error('Please check your .env file and ensure both variables are set correctly.');
   process.exit(1);
 }
 

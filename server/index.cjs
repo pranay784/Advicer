@@ -71,6 +71,11 @@ app.get('/', (req, res) => {
 // Authentication Routes
 app.post('/api/auth/register', async (req, res) => {
   try {
+    console.log('=== REGISTRATION DEBUG START ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request body:', req.body);
+    console.log('Content-Type:', req.headers['content-type']);
+    
     console.log('📝 Registration request received:', req.body);
     const { email, password, name } = req.body;
 
@@ -79,6 +84,7 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    console.log('🔍 About to check if user exists...');
     console.log('🔍 Checking if user exists:', email);
     // Check if user already exists
     const { data: existingUser, error: checkError } = await supabase
@@ -94,11 +100,14 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'User already exists with this email' });
     }
 
+    console.log('🔐 About to hash password...');
     console.log('🔐 Hashing password...');
     // Hash password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
+    console.log('🔐 Password hashed successfully');
 
+    console.log('👤 About to create user in database...');
     console.log('👤 Creating new user...');
     // Create new user
     const { data: newUser, error: insertError } = await supabase
@@ -123,6 +132,7 @@ app.post('/api/auth/register', async (req, res) => {
     console.log('👤 User creation result:', { newUser, insertError });
     if (insertError) throw insertError;
 
+    console.log('🔑 About to generate JWT...');
     console.log('🔑 Generating JWT token...');
     // Generate JWT token
     const token = jwt.sign(
@@ -130,18 +140,30 @@ app.post('/api/auth/register', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+    console.log('🔑 JWT generated successfully');
 
+    console.log('✅ About to send response...');
     console.log('✅ Registration successful for:', email);
-    res.status(201).json({
+    const responseData = {
       message: 'User created successfully',
       token,
       user: newUser
-    });
+    };
+    console.log('📤 Sending response:', responseData);
+    res.status(201).json(responseData);
+    console.log('📤 Response sent successfully');
   } catch (error) {
+    console.log('=== REGISTRATION ERROR ===');
     console.error('Registration error:', error);
     console.error('Error details:', error.message);
     console.error('Error stack:', error.stack);
-    res.status(500).json({ error: 'Failed to create user' });
+    
+    // Make sure we always send JSON
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to create user', details: error.message });
+    }
+  } finally {
+    console.log('=== REGISTRATION DEBUG END ===');
   }
 });
 

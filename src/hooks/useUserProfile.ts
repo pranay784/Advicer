@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { useAuth } from './useAuth';
 import { UserProfile, Goal, DailyQuest, Achievement } from '../types/user';
 
 // Initialize Supabase client with better error handling
@@ -27,6 +28,7 @@ const defaultProfile: UserProfile = {
 };
 
 export const useUserProfile = () => {
+  const { getCurrentUserId } = useAuth();
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -36,49 +38,33 @@ export const useUserProfile = () => {
 
   const loadProfile = async () => {
     try {
-      // Get user IP for identification (temporary solution)
-      const userIp = await getUserIP();
+      // Get current user ID from auth
+      const userId = getCurrentUserId();
+      if (!userId) {
+        throw new Error('No authenticated user');
+      }
       
-      // Try to find existing user by name (using IP temporarily)
+      // Try to find existing user by ID
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
-        .eq('name', userIp)
-        .limit(1); // Use limit(1) to handle potential duplicate IPs
+        .eq('id', userId)
+        .single();
       
       if (fetchError && fetchError.code !== 'PGRST116') {
         throw fetchError;
       }
       
-      let userData = existingUser ? existingUser[0] : null; // Get the first user if found
+      let userData = existingUser;
       
       if (!userData) {
-        // Create new user
-        const { data: newUser, error: insertError } = await supabase
-          .from('users')
-          .insert([{
-            name: userIp,
-            level: 1,
-            experience: 0,
-            strength: 10,
-            endurance: 10,
-            agility: 10,
-            intelligence: 10,
-            willpower: 10,
-            current_day_id: 1,
-            setup_completed: false
-          }])
-          .select('*')
-          .single();
-          
-        if (insertError) throw insertError;
-        userData = newUser;
+        throw new Error('User not found');
       } else {
         // Update last login
         const { data: updatedUser, error: updateError } = await supabase
           .from('users')
           .update({ last_login: new Date().toISOString() })
-          .eq('id', existingUser[0].id)
+          .eq('id', userData.id)
           .select('*')
           .single();
           
@@ -96,7 +82,7 @@ export const useUserProfile = () => {
       // Transform Supabase data to match UserProfile interface
       const profileData: UserProfile = {
         id: userData.id,
-        name: userData.name === await getUserIP() ? undefined : userData.name, // Don't show IP as name
+        name: userData.name,
         level: userData.level,
         experience: userData.experience,
         stats: {
@@ -184,30 +170,10 @@ export const useUserProfile = () => {
     }));
   };
 
-  // Helper function to get user IP (temporary identification method)
-  const getUserIP = async (): Promise<string> => {
-    try {
-      const response = await fetch('https://api.ipify.org?format=json');
-      const data = await response.json();
-      return data.ip;
-    } catch (error) {
-      console.error('Error getting IP:', error);
-      return 'unknown_' + Date.now(); // Fallback identifier
-    }
-  };
-
   const saveProfile = async (updatedProfile: UserProfile) => {
     try {
-      const userIp = await getUserIP();
-      
-      // Find user by IP
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('name', userIp)
-        .limit(1); // Use limit(1)
-        
-      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('No authenticated user');
       
       // Update user profile
       const { data: updatedUser, error: updateError } = await supabase
@@ -223,7 +189,7 @@ export const useUserProfile = () => {
           willpower: updatedProfile.stats.willpower,
           last_login: new Date().toISOString()
         })
-        .eq('id', existingUser[0].id) // Access the first user's ID
+        .eq('id', userId)
         .select()
         .single();
         
@@ -238,22 +204,14 @@ export const useUserProfile = () => {
 
   const saveConversation = async (userMessage: string, sjwResponse: string) => {
     try {
-      const userIp = await getUserIP();
-      
-      // Find user by IP
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('name', userIp)
-        .limit(1); // Use limit(1)
-        
-      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('No authenticated user');
       
       // Insert conversation into history
       const { error: insertError } = await supabase
         .from('conversation_history')
         .insert([{
-          user_id: existingUser[0].id, // Access the first user's ID
+          user_id: userId,
           user_message: userMessage,
           sjw_response: sjwResponse
         }]);
@@ -264,7 +222,7 @@ export const useUserProfile = () => {
       await supabase
         .from('users')
         .update({ last_login: new Date().toISOString() })
-        .eq('id', existingUser[0].id);
+        .eq('id', userId);
     } catch (error) {
       console.error('Error saving conversation:', error);
     }
@@ -277,19 +235,20 @@ export const useUserProfile = () => {
 
   const addExperience = async (amount: number) => {
     try {
-      const userIp = await getUserIP();
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('No authenticated user');
       
-      // Find user by IP
+      // Find user by ID
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
-        .eq('name', userIp)
-        .limit(1); // Use limit(1)
+        .eq('id', userId)
+        .single();
         
-      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
+      if (fetchError || !existingUser) throw new Error('User not found');
       
       // Add experience and calculate new level
-      const newExperience = existingUser[0].experience + amount;
+      const newExperience = existingUser.experience + amount;
       const newLevel = Math.floor(newExperience / 100) + 1;
       
       const { data: updatedUser, error: updateError } = await supabase
@@ -299,7 +258,7 @@ export const useUserProfile = () => {
           level: newLevel,
           last_login: new Date().toISOString()
         })
-        .eq('id', existingUser[0].id) // Access the first user's ID
+        .eq('id', userId)
         .select()
         .single();
         
@@ -315,22 +274,14 @@ export const useUserProfile = () => {
 
   const addGoal = async (goal: Omit<Goal, 'id' | 'createdAt'>) => {
     try {
-      const userIp = await getUserIP();
-      
-      // Find user by IP
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('name', userIp)
-        .limit(1); // Use limit(1)
-        
-      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('No authenticated user');
       
       // Insert new goal
       const { data: newGoal, error: insertError } = await supabase
         .from('goals')
         .insert([{
-          user_id: existingUser[0].id, // Access the first user's ID
+          user_id: userId,
           title: goal.title,
           description: goal.description,
           category: goal.category,
@@ -352,16 +303,8 @@ export const useUserProfile = () => {
 
   const updateGoal = async (goalId: string, updates: Partial<Goal>) => {
     try {
-      const userIp = await getUserIP();
-      
-      // Find user by IP
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('name', userIp)
-        .limit(1); // Use limit(1)
-        
-      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('No authenticated user');
       
       // Update goal
       const { data: updatedGoal, error: updateError } = await supabase
@@ -375,7 +318,7 @@ export const useUserProfile = () => {
           status: updates.status
         })
         .eq('id', goalId)
-        .eq('user_id', existingUser[0].id) // Access the first user's ID
+        .eq('user_id', userId)
         .select()
         .single();
         
@@ -394,22 +337,14 @@ export const useUserProfile = () => {
 
   const addDailyQuest = async (quest: Omit<DailyQuest, 'id' | 'createdAt' | 'completed' | 'streak'>) => {
     try {
-      const userIp = await getUserIP();
-      
-      // Find user by IP
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('name', userIp)
-        .limit(1); // Use limit(1)
-        
-      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('No authenticated user');
       
       // Insert new quest
       const { data: newQuest, error: insertError } = await supabase
         .from('daily_quests')
         .insert([{
-          user_id: existingUser[0].id, // Access the first user's ID
+          user_id: userId,
           title: quest.title,
           description: quest.description,
           category: quest.category,
@@ -434,34 +369,35 @@ export const useUserProfile = () => {
     try {
       console.log('🎯 ===== COMPLETE QUEST HOOK START =====');
       console.log('🎯 Quest ID to complete:', questId);
-      const userIp = await getUserIP();
-      console.log('🌐 User IP for identification:', userIp);
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('No authenticated user');
+      console.log('👤 User ID for identification:', userId);
       
-      // Find user by IP
+      // Find user by ID
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
-        .eq('name', userIp)
-        .limit(1); // Use limit(1)
+        .eq('id', userId)
+        .single();
         
-      if (fetchError || !existingUser || existingUser.length === 0) {
+      if (fetchError || !existingUser) {
         console.error('❌ USER NOT FOUND ERROR:', fetchError);
         throw new Error('User not found');
       }
       
-      console.log('👤 Found user with ID:', existingUser[0].id);
-      console.log('👤 User data:', existingUser[0]);
+      console.log('👤 Found user with ID:', existingUser.id);
+      console.log('👤 User data:', existingUser);
       
       // Get quest details first
       console.log('🔍 Searching for quest in database...');
       console.log('🔍 Quest ID:', questId);
-      console.log('🔍 User ID:', existingUser[0].id);
+      console.log('🔍 User ID:', existingUser.id);
       
       const { data: quest, error: questError } = await supabase
         .from('daily_quests')
         .select('*')
         .eq('id', questId)
-        .eq('user_id', existingUser[0].id)
+        .eq('user_id', existingUser.id)
         .single();
         
       if (questError || !quest) {
@@ -470,7 +406,7 @@ export const useUserProfile = () => {
         const { data: allQuests } = await supabase
           .from('daily_quests')
           .select('*')
-          .eq('user_id', existingUser[0].id);
+          .eq('user_id', existingUser.id);
         console.log('📋 All available quests for user:', allQuests);
         console.log('📋 Quest count:', allQuests?.length || 0);
         throw new Error(`Quest not found: ${questId}`);
@@ -506,14 +442,14 @@ export const useUserProfile = () => {
       console.log('✅ Quest successfully marked as completed in database');
       
       // Update user experience and level
-      const newExperience = existingUser[0].experience + (quest.experience_reward || 10);
+      const newExperience = existingUser.experience + (quest.experience_reward || 10);
       const newLevel = Math.floor(newExperience / 100) + 1;
       
       console.log('💰 Calculating XP update:');
-      console.log('💰 Current XP:', existingUser[0].experience);
+      console.log('💰 Current XP:', existingUser.experience);
       console.log('💰 XP Reward:', quest.experience_reward || 10);
       console.log('💰 New XP Total:', newExperience);
-      console.log('📈 Current Level:', existingUser[0].level);
+      console.log('📈 Current Level:', existingUser.level);
       console.log('📈 New Level:', newLevel);
       
       const { error: updateUserError } = await supabase
@@ -523,7 +459,9 @@ export const useUserProfile = () => {
           level: newLevel,
           last_login: new Date().toISOString()
         })
-        .eq('id', existingUser[0].id);
+        .eq('id', userId)
+        .select()
+        .single();
       
       if (updateUserError) {
         console.error('❌ DATABASE UPDATE ERROR (user):', updateUserError);
@@ -549,25 +487,14 @@ export const useUserProfile = () => {
 
   const addAchievement = async (achievement: Omit<Achievement, 'id' | 'unlockedDate'>) => {
     try {
-      const userIp = await getUserIP();
-      
-      // Find user by IP
-      const { data: existingUser, error: fetchError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('name', userIp)
-        .limit(1); // Use limit(1)
-        
-      console.log('✅ Found quest:', quest.title);
-      
-      if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
-      console.log('📝 Updating quest completion...');
+      const userId = getCurrentUserId();
+      if (!userId) throw new Error('No authenticated user');
       
       // Insert new achievement
       const { data: newAchievement, error: insertError } = await supabase
         .from('achievements')
         .insert([{
-          user_id: existingUser[0].id, // Access the first user's ID
+          user_id: userId,
           title: achievement.title,
           description: achievement.description,
           icon: achievement.icon
@@ -575,25 +502,13 @@ export const useUserProfile = () => {
         .select()
         .single();
         
-      console.log('💰 Updating user XP:', existingUser[0].experience, '->', newExperience);
-      console.log('📈 Level update:', existingUser[0].level, '->', newLevel);
-      
       if (insertError) throw insertError;
-        console.error('❌ Quest not found:', questError);
-        console.log('🔍 Available quests for user:');
-        const { data: allQuests } = await supabase
-          .from('daily_quests')
-          .select('*')
-          .eq('user_id', existingUser[0].id);
-        console.log('📋 All user quests:', allQuests);
       
       // Reload profile to get updated data
-      console.log('🔄 Reloading profile...');
       await loadProfile();
-      console.log('✅ Quest completion process finished');
     } catch (error) {
       console.error('Error adding achievement:', error);
-      throw error; // Re-throw so the UI can handle it
+      throw error;
     }
   };
 

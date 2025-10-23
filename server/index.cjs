@@ -1,70 +1,40 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs').promises;
-const path = require('path');
-const crypto = require('crypto');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const DATA_DIR = path.join(__dirname, 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+// Initialize Supabase client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing Supabase environment variables. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Ensure data directory exists
-async function ensureDataDir() {
-  try {
-    await fs.access(DATA_DIR);
-  } catch {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-  }
-}
-
-// Get user ID from IP address (hashed for privacy)
-function getUserIdFromIP(ip) {
-  // Remove IPv6 prefix if present
-  const cleanIP = ip.replace(/^::ffff:/, '');
-  return crypto.createHash('sha256').update(cleanIP + 'sjw-salt').digest('hex').substring(0, 16);
-}
-
-// Load users data
-async function loadUsers() {
-  try {
-    const data = await fs.readFile(USERS_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch {
-    return {};
-  }
-}
-
-// Save users data
-async function saveUsers(users) {
-  await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
-}
-
-// Default user profile
-function createDefaultProfile(userId) {
+// Create default user profile
+function createDefaultProfile() {
   return {
-    id: userId,
     level: 1,
     experience: 0,
-    stats: {
-      strength: 1,
-      endurance: 1,
-      agility: 1,
-      intelligence: 1,
-      willpower: 1,
-    },
-    goals: [],
-    dailyQuests: [],
-    achievements: [],
-    conversationHistory: [],
-    lastLogin: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
+    strength: 10,
+    endurance: 10,
+    agility: 10,
+    intelligence: 10,
+    willpower: 10,
+    last_login: new Date().toISOString(),
+    created_at: new Date().toISOString(),
     name: null,
-    setupCompleted: false
+    current_day_id: 1,
+    setup_completed: false
   };
 }
 
@@ -75,20 +45,48 @@ app.get('/', (req, res) => {
 
 app.get('/api/user/profile', async (req, res) => {
   try {
-    await ensureDataDir();
-    const userId = getUserIdFromIP(req.ip);
-    const users = await loadUsers();
+    // For now, we'll use a simple IP-based user identification
+    // In production, you'd use proper authentication
+    const userIp = req.ip.replace(/^::ffff:/, '');
     
-    if (!users[userId]) {
-      users[userId] = createDefaultProfile(userId);
-      await saveUsers(users);
-    } else {
-      // Update last login
-      users[userId].lastLogin = new Date().toISOString();
-      await saveUsers(users);
+    // Try to find existing user by IP (temporary solution)
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('name', userIp) // Using name field temporarily to store IP
+      .single();
+    
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      throw fetchError;
     }
     
-    res.json(users[userId]);
+    if (!existingUser) {
+      // Create new user
+      const defaultProfile = createDefaultProfile();
+      defaultProfile.name = userIp; // Temporary IP storage
+      
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert([defaultProfile])
+        .select()
+        .single();
+        
+      if (insertError) throw insertError;
+      
+      res.json(newUser);
+    } else {
+      // Update last login
+      const { data: updatedUser, error: updateError } = await supabase
+        .from('users')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', existingUser.id)
+        .select()
+        .single();
+        
+      if (updateError) throw updateError;
+      
+      res.json(updatedUser);
+    }
   } catch (error) {
     console.error('Error loading profile:', error);
     res.status(500).json({ error: 'Failed to load profile' });
@@ -97,19 +95,35 @@ app.get('/api/user/profile', async (req, res) => {
 
 app.post('/api/user/profile', async (req, res) => {
   try {
-    await ensureDataDir();
-    const userId = getUserIdFromIP(req.ip);
-    const users = await loadUsers();
+    const userIp = req.ip.replace(/^::ffff:/, '');
     
-    if (!users[userId]) {
-      users[userId] = createDefaultProfile(userId);
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
     }
     
-    // Update profile with provided data
-    users[userId] = { ...users[userId], ...req.body, lastLogin: new Date().toISOString() };
-    await saveUsers(users);
+    // Update user profile
+    const updateData = { 
+      ...req.body, 
+      last_login: new Date().toISOString() 
+    };
     
-    res.json(users[userId]);
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', existingUser.id)
+      .select()
+      .single();
+      
+    if (updateError) throw updateError;
+    
+    res.json(updatedUser);
   } catch (error) {
     console.error('Error saving profile:', error);
     res.status(500).json({ error: 'Failed to save profile' });
@@ -118,22 +132,38 @@ app.post('/api/user/profile', async (req, res) => {
 
 app.post('/api/user/experience', async (req, res) => {
   try {
-    await ensureDataDir();
-    const userId = getUserIdFromIP(req.ip);
-    const users = await loadUsers();
+    const userIp = req.ip.replace(/^::ffff:/, '');
     const { amount } = req.body;
     
-    if (!users[userId]) {
-      users[userId] = createDefaultProfile(userId);
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
     }
     
     // Add experience and calculate new level
-    users[userId].experience += amount;
-    users[userId].level = Math.floor(users[userId].experience / 100) + 1;
-    users[userId].lastLogin = new Date().toISOString();
+    const newExperience = existingUser.experience + amount;
+    const newLevel = Math.floor(newExperience / 100) + 1;
     
-    await saveUsers(users);
-    res.json(users[userId]);
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({ 
+        experience: newExperience,
+        level: newLevel,
+        last_login: new Date().toISOString()
+      })
+      .eq('id', existingUser.id)
+      .select()
+      .single();
+      
+    if (updateError) throw updateError;
+    
+    res.json(updatedUser);
   } catch (error) {
     console.error('Error adding experience:', error);
     res.status(500).json({ error: 'Failed to add experience' });
@@ -142,33 +172,36 @@ app.post('/api/user/experience', async (req, res) => {
 
 app.post('/api/user/conversation', async (req, res) => {
   try {
-    await ensureDataDir();
-    const userId = getUserIdFromIP(req.ip);
-    const users = await loadUsers();
+    const userIp = req.ip.replace(/^::ffff:/, '');
     const { message, response } = req.body;
     
-    if (!users[userId]) {
-      users[userId] = createDefaultProfile(userId);
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
     }
     
-    // Add conversation to history (keep last 50 messages)
-    if (!users[userId].conversationHistory) {
-      users[userId].conversationHistory = [];
-    }
+    // Insert conversation into history
+    const { error: insertError } = await supabase
+      .from('conversation_history')
+      .insert([{
+        user_id: existingUser.id,
+        user_message: message,
+        sjw_response: response
+      }]);
+      
+    if (insertError) throw insertError;
     
-    users[userId].conversationHistory.push({
-      userMessage: message,
-      sjwResponse: response,
-      timestamp: new Date().toISOString()
-    });
-    
-    // Keep only last 50 conversations
-    if (users[userId].conversationHistory.length > 50) {
-      users[userId].conversationHistory = users[userId].conversationHistory.slice(-50);
-    }
-    
-    users[userId].lastLogin = new Date().toISOString();
-    await saveUsers(users);
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', existingUser.id);
     
     res.json({ success: true });
   } catch (error) {
@@ -179,23 +212,36 @@ app.post('/api/user/conversation', async (req, res) => {
 
 app.post('/api/user/goal', async (req, res) => {
   try {
-    await ensureDataDir();
-    const userId = getUserIdFromIP(req.ip);
-    const users = await loadUsers();
+    const userIp = req.ip.replace(/^::ffff:/, '');
     
-    if (!users[userId]) {
-      users[userId] = createDefaultProfile(userId);
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
     }
     
-    const newGoal = {
-      id: 'goal_' + Date.now(),
-      ...req.body,
-      createdAt: new Date().toISOString()
-    };
+    // Insert new goal
+    const { data: newGoal, error: insertError } = await supabase
+      .from('goals')
+      .insert([{
+        user_id: existingUser.id,
+        ...req.body
+      }])
+      .select()
+      .single();
+      
+    if (insertError) throw insertError;
     
-    users[userId].goals.push(newGoal);
-    users[userId].lastLogin = new Date().toISOString();
-    await saveUsers(users);
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', existingUser.id);
     
     res.json(newGoal);
   } catch (error) {
@@ -206,26 +252,42 @@ app.post('/api/user/goal', async (req, res) => {
 
 app.put('/api/user/goal/:goalId', async (req, res) => {
   try {
-    await ensureDataDir();
-    const userId = getUserIdFromIP(req.ip);
-    const users = await loadUsers();
+    const userIp = req.ip.replace(/^::ffff:/, '');
     const { goalId } = req.params;
     
-    if (!users[userId]) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    const goalIndex = users[userId].goals.findIndex(g => g.id === goalId);
-    if (goalIndex === -1) {
-      return res.status(404).json({ error: 'Goal not found' });
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
     }
     
     // Update goal
-    users[userId].goals[goalIndex] = { ...users[userId].goals[goalIndex], ...req.body };
-    users[userId].lastLogin = new Date().toISOString();
+    const { data: updatedGoal, error: updateError } = await supabase
+      .from('goals')
+      .update(req.body)
+      .eq('id', goalId)
+      .eq('user_id', existingUser.id)
+      .select()
+      .single();
+      
+    if (updateError) throw updateError;
     
-    await saveUsers(users);
-    res.json(users[userId].goals[goalIndex]);
+    if (!updatedGoal) {
+      return res.status(404).json({ error: 'Goal not found' });
+    }
+    
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', existingUser.id);
+    
+    res.json(updatedGoal);
   } catch (error) {
     console.error('Error updating goal:', error);
     res.status(500).json({ error: 'Failed to update goal' });
@@ -234,25 +296,40 @@ app.put('/api/user/goal/:goalId', async (req, res) => {
 
 app.post('/api/user/quest', async (req, res) => {
   try {
-    await ensureDataDir();
-    const userId = getUserIdFromIP(req.ip);
-    const users = await loadUsers();
+    const userIp = req.ip.replace(/^::ffff:/, '');
     
-    if (!users[userId]) {
-      users[userId] = createDefaultProfile(userId);
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
     }
     
-    const newQuest = {
-      id: 'quest_' + Date.now(),
+    // Insert new quest
+    const questData = {
+      user_id: existingUser.id,
       ...req.body,
       completed: false,
-      streak: 0,
-      createdAt: new Date().toISOString()
+      streak: 0
     };
     
-    users[userId].dailyQuests.push(newQuest);
-    users[userId].lastLogin = new Date().toISOString();
-    await saveUsers(users);
+    const { data: newQuest, error: insertError } = await supabase
+      .from('daily_quests')
+      .insert([questData])
+      .select()
+      .single();
+      
+    if (insertError) throw insertError;
+    
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', existingUser.id);
     
     res.json(newQuest);
   } catch (error) {
@@ -262,6 +339,274 @@ app.post('/api/user/quest', async (req, res) => {
 });
 
 app.post('/api/user/quest/complete', async (req, res) => {
+  try {
+    const userIp = req.ip.replace(/^::ffff:/, '');
+    const { questId } = req.body;
+    
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    // Get quest details
+    const { data: quest, error: questError } = await supabase
+      .from('daily_quests')
+      .select('*')
+      .eq('id', questId)
+      .eq('user_id', existingUser.id)
+      .single();
+      
+    if (questError || !quest) {
+      return res.status(404).json({ error: 'Quest not found' });
+    }
+    
+    // Update quest completion
+    await supabase
+      .from('daily_quests')
+      .update({
+        completed: true,
+        streak: quest.streak + 1,
+        last_completed: new Date().toISOString()
+      })
+      .eq('id', questId);
+    
+    // Update user experience and level
+    const newExperience = existingUser.experience + (quest.experience_reward || 10);
+    const newLevel = Math.floor(newExperience / 100) + 1;
+    
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({
+        experience: newExperience,
+        level: newLevel,
+        last_login: new Date().toISOString()
+      })
+      .eq('id', existingUser.id)
+      .select()
+      .single();
+      
+    if (updateError) throw updateError;
+    
+    res.json(updatedUser);
+  } catch (error) {
+    console.error('Error completing quest:', error);
+    res.status(500).json({ error: 'Failed to complete quest' });
+  }
+});
+
+app.post('/api/user/achievement', async (req, res) => {
+  try {
+    const userIp = req.ip.replace(/^::ffff:/, '');
+    
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    // Insert new achievement
+    const { data: newAchievement, error: insertError } = await supabase
+      .from('achievements')
+      .insert([{
+        user_id: existingUser.id,
+        ...req.body
+      }])
+      .select()
+      .single();
+      
+    if (insertError) throw insertError;
+    
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', existingUser.id);
+    
+    res.json(newAchievement);
+  } catch (error) {
+    console.error('Error adding achievement:', error);
+    res.status(500).json({ error: 'Failed to add achievement' });
+  }
+});
+
+// New endpoint to get user's goals
+app.get('/api/user/goals', async (req, res) => {
+  try {
+    const userIp = req.ip.replace(/^::ffff:/, '');
+    
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    // Get user's goals
+    const { data: goals, error: goalsError } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('user_id', existingUser.id)
+      .order('created_at', { ascending: false });
+      
+    if (goalsError) throw goalsError;
+    
+    res.json(goals || []);
+  } catch (error) {
+    console.error('Error fetching goals:', error);
+    res.status(500).json({ error: 'Failed to fetch goals' });
+  }
+});
+
+// New endpoint to get user's daily quests
+app.get('/api/user/quests', async (req, res) => {
+  try {
+    const userIp = req.ip.replace(/^::ffff:/, '');
+    
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    // Get user's quests
+    const { data: quests, error: questsError } = await supabase
+      .from('daily_quests')
+      .select('*')
+      .eq('user_id', existingUser.id)
+      .order('created_at', { ascending: false });
+      
+    if (questsError) throw questsError;
+    
+    res.json(quests || []);
+  } catch (error) {
+    console.error('Error fetching quests:', error);
+    res.status(500).json({ error: 'Failed to fetch quests' });
+  }
+});
+
+// New endpoint to get user's achievements
+app.get('/api/user/achievements', async (req, res) => {
+  try {
+    const userIp = req.ip.replace(/^::ffff:/, '');
+    
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    // Get user's achievements
+    const { data: achievements, error: achievementsError } = await supabase
+      .from('achievements')
+      .select('*')
+      .eq('user_id', existingUser.id)
+      .order('unlocked_at', { ascending: false });
+      
+    if (achievementsError) throw achievementsError;
+    
+    res.json(achievements || []);
+  } catch (error) {
+    console.error('Error fetching achievements:', error);
+    res.status(500).json({ error: 'Failed to fetch achievements' });
+  }
+});
+
+// New endpoint to get journey data for a specific day
+app.get('/api/journey/:dayNumber', async (req, res) => {
+  try {
+    const { dayNumber } = req.params;
+    
+    // Get journey data for the specific day
+    const { data: journeyData, error } = await supabase
+      .from('journey_data')
+      .select('*')
+      .eq('day_number', parseInt(dayNumber))
+      .order('id', { ascending: true });
+      
+    if (error) throw error;
+    
+    res.json(journeyData || []);
+  } catch (error) {
+    console.error('Error fetching journey data:', error);
+    res.status(500).json({ error: 'Failed to fetch journey data' });
+  }
+});
+
+// Legacy endpoints for backward compatibility (will be removed later)
+app.post('/api/user/quest', async (req, res) => {
+  try {
+    const userIp = req.ip.replace(/^::ffff:/, '');
+    
+    // Find user by IP
+    const { data: existingUser, error: fetchError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', userIp)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    // Insert new quest
+    const questData = {
+      user_id: existingUser.id,
+      ...req.body,
+      completed: false,
+      streak: 0
+    };
+    
+    const { data: newQuest, error: insertError } = await supabase
+      .from('daily_quests')
+      .insert([questData])
+      .select()
+      .single();
+      
+    if (insertError) throw insertError;
+    
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', existingUser.id);
+    
+    res.json(newQuest);
+  } catch (error) {
+    console.error('Error adding quest:', error);
+    res.status(500).json({ error: 'Failed to add quest' });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Sung Jin Woo Server running on port ${PORT}`);
+  console.log('Supabase client initialized successfully');
+});
+
   try {
     await ensureDataDir();
     const userId = getUserIdFromIP(req.ip);

@@ -11,14 +11,17 @@ console.log('Frontend Supabase Environment Check:');
 console.log('VITE_SUPABASE_URL:', supabaseUrl || 'NOT SET');
 console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'NOT SET');
 
+// Create a fallback or handle missing environment variables gracefully
+const finalSupabaseUrl = supabaseUrl || 'https://placeholder.supabase.co';
+const finalSupabaseAnonKey = supabaseAnonKey || 'placeholder-key';
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables for frontend:');
-  console.error('VITE_SUPABASE_URL:', supabaseUrl || 'MISSING');
-  console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'MISSING');
-  throw new Error('Missing Supabase environment variables. Please check your .env file contains VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+  console.warn('Missing Supabase environment variables. Some features may not work properly.');
+  console.warn('VITE_SUPABASE_URL:', supabaseUrl || 'MISSING');
+  console.warn('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'MISSING');
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(finalSupabaseUrl, finalSupabaseAnonKey);
 
 const defaultProfile: UserProfile = {
   id: 'default',

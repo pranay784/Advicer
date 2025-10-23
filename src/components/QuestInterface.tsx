@@ -181,14 +181,21 @@ const QuestInterface: React.FC = () => {
         if (isRealQuest) {
           // Complete the quest in the backend
           console.log('📤 Calling completeQuestInProfile...');
-          await completeQuestInProfile(activeQuest.id);
+          const result = await completeQuestInProfile(activeQuest.id);
+          console.log('✅ Quest completion result:', result);
           console.log('✅ Quest completed successfully:', activeQuest.title);
         } else {
           // For demo quests, just award some XP
           console.log('🎮 Demo quest - awarding XP:', activeQuest.expReward);
-          await addExperience(activeQuest.expReward);
+          const result = await addExperience(activeQuest.expReward);
+          console.log('✅ XP award result:', result);
           console.log('✅ Demo quest completed, XP awarded:', activeQuest.expReward);
         }
+        
+        // Force reload the profile to see changes
+        console.log('🔄 Force reloading profile...');
+        await loadProfile();
+        console.log('✅ Profile reloaded');
         
         // Close the active quest view
         setActiveQuest(null);
@@ -201,7 +208,8 @@ const QuestInterface: React.FC = () => {
         
       } catch (error) {
         console.error('❌ Error completing quest:', error);
-        console.error('❌ Full error details:', JSON.stringify(error, null, 2));
+        console.error('❌ Error stack:', error.stack);
+        console.error('❌ Error message:', error.message);
         // Still close the quest view even if there was an error
         setActiveQuest(null);
       }

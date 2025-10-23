@@ -607,6 +607,7 @@ app.listen(PORT, () => {
   console.log('Supabase client initialized successfully');
 });
 
+app.post('/api/user/quest/complete', async (req, res) => {
   try {
     await ensureDataDir();
     const userId = getUserIdFromIP(req.ip);

@@ -472,6 +472,12 @@ export const useUserProfile = () => {
       
       console.log('✅ Found quest:', quest.title);
       
+      // Check if quest is already completed
+      if (quest.completed) {
+        console.log('⚠️ Quest already completed');
+        return { success: true, alreadyCompleted: true };
+      }
+      
       // Update quest completion
       console.log('📝 Updating quest completion...');
       const { error: updateQuestError } = await supabase
@@ -487,6 +493,8 @@ export const useUserProfile = () => {
         console.error('❌ Error updating quest:', updateQuestError);
         throw updateQuestError;
       }
+      
+      console.log('✅ Quest marked as completed in database');
       
       // Update user experience and level
       const newExperience = existingUser[0].experience + (quest.experience_reward || 10);
@@ -508,6 +516,8 @@ export const useUserProfile = () => {
         console.error('❌ Error updating user:', updateUserError);
         throw updateUserError;
       }
+      
+      console.log('✅ User XP and level updated in database');
       
       // Reload profile to get updated data
       console.log('🔄 Reloading profile...');

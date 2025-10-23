@@ -68,7 +68,6 @@ function App() {
   const { profile, isLoading, updateProfile, getProfileSummary, saveConversation, addExperience, addGoal, addDailyQuest, loadProfile } = useUserProfile();
   const [currentView, setCurrentView] = useState<'dashboard' | 'quests' | 'profile' | 'chat'>('dashboard');
   const [showProfileSetup, setShowProfileSetup] = useState(false);
-    dbError,
   const [currentSJWMessage, setCurrentSJWMessage] = useState('');
   const [showSpeechBubble, setShowSpeechBubble] = useState(false);
   const [inputText, setInputText] = useState('');
@@ -462,33 +461,6 @@ function App() {
             <Crown className="w-8 h-8 text-current" />
           </div>
           <p className="text-yellow-400">Initializing Hunter System...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (dbError) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900 to-slate-900 flex items-center justify-center p-4">
-        <div className="bg-red-900/20 border border-red-500 rounded-lg p-8 max-w-2xl text-center">
-          <div className="text-red-400 text-6xl mb-4">⚠️</div>
-          <h2 className="text-red-200 text-2xl font-bold mb-4">Database Connection Error</h2>
-          <p className="text-red-300 mb-6">{dbError}</p>
-          <div className="bg-red-950/50 border border-red-600 rounded p-4 text-left">
-            <h3 className="text-red-200 font-semibold mb-2">To fix this issue:</h3>
-            <ol className="text-red-300 text-sm space-y-1 list-decimal list-inside">
-              <li>Go to your Supabase Dashboard</li>
-              <li>Navigate to SQL Editor</li>
-              <li>Copy and run the migration script from <code>supabase/migrations/create_hunter_schema.sql</code></li>
-              <li>Refresh this page</li>
-            </ol>
-          </div>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="mt-4 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-          >
-            Retry Connection
-          </button>
         </div>
       </div>
     );

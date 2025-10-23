@@ -19,14 +19,20 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 console.log('Environment variables check:');
 console.log('SUPABASE_URL exists:', !!supabaseUrl);
 console.log('SUPABASE_SERVICE_ROLE_KEY exists:', !!supabaseServiceKey);
-console.log('SUPABASE_URL value:', supabaseUrl ? 'SET' : 'NOT SET');
+console.log('SUPABASE_URL value:', supabaseUrl || 'NOT SET');
 console.log('SUPABASE_SERVICE_ROLE_KEY value:', supabaseServiceKey ? 'SET' : 'NOT SET');
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('Missing Supabase environment variables.');
-  console.error('SUPABASE_URL:', supabaseUrl || 'NOT SET');
-  console.error('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey || 'NOT SET');
+  console.error('SUPABASE_URL:', supabaseUrl || 'MISSING - Please add this to your .env file');
+  console.error('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? 'SET' : 'MISSING');
   console.error('Please check your .env file and ensure both variables are set correctly.');
+  console.error('');
+  console.error('Your .env file should contain:');
+  console.error('SUPABASE_URL=https://your-project-id.supabase.co');
+  console.error('SUPABASE_SERVICE_ROLE_KEY=your_service_role_key');
+  console.error('');
+  console.error('Get these values from your Supabase project dashboard > Settings > API');
   process.exit(1);
 }
 

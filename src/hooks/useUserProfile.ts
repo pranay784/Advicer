@@ -2,15 +2,31 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { UserProfile, Goal, DailyQuest, Achievement } from '../types/user';
 
-// Initialize Supabase client
+// Initialize Supabase client with better error handling
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+console.log('🔍 Supabase Environment Check:');
+console.log('VITE_SUPABASE_URL exists:', !!supabaseUrl);
+console.log('VITE_SUPABASE_ANON_KEY exists:', !!supabaseAnonKey);
+console.log('Supabase URL:', supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'NOT SET');
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables. Please check your .env file.');
+  console.error('❌ Missing Supabase environment variables!');
+  console.error('Please ensure your .env file contains:');
+  console.error('VITE_SUPABASE_URL=your_supabase_url');
+  console.error('VITE_SUPABASE_ANON_KEY=your_anon_key');
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = supabaseUrl && supabaseAnonKey 
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
+
+if (supabase) {
+  console.log('✅ Supabase client initialized successfully');
+} else {
+  console.error('❌ Failed to initialize Supabase client');
+}
 
 const defaultProfile: UserProfile = {
   id: 'default',
@@ -39,11 +55,20 @@ export const useUserProfile = () => {
   }, []);
 
   const loadProfile = async () => {
+    if (!supabase) {
+      console.error('❌ Supabase client not initialized');
+      setIsLoading(false);
+      return;
+    }
+
     try {
+      console.log('🔄 Loading user profile...');
       // Get user IP for identification (temporary solution)
       const userIp = await getUserIP();
+      console.log('🌐 User IP:', userIp);
       
       // Try to find existing user by name (using IP temporarily)
+      console.log('🔍 Searching for existing user...');
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select(`
@@ -55,13 +80,17 @@ export const useUserProfile = () => {
         .eq('name', userIp)
         .single();
       
+      console.log('📊 Supabase query result:', { existingUser, fetchError });
+      
       if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('❌ Database query error:', fetchError);
         throw fetchError;
       }
       
       let userData;
       
       if (!existingUser) {
+        console.log('👤 Creating new user...');
         // Create new user
         const { data: newUser, error: insertError } = await supabase
           .from('users')
@@ -85,9 +114,11 @@ export const useUserProfile = () => {
           `)
           .single();
           
+        console.log('✅ New user created:', newUser);
         if (insertError) throw insertError;
         userData = newUser;
       } else {
+        console.log('👤 Updating existing user...');
         // Update last login
         const { data: updatedUser, error: updateError } = await supabase
           .from('users')
@@ -101,10 +132,12 @@ export const useUserProfile = () => {
           `)
           .single();
           
+        console.log('✅ User updated:', updatedUser);
         if (updateError) throw updateError;
         userData = updatedUser;
       }
       
+      console.log('🔄 Transforming user data...');
       // Transform Supabase data to match UserProfile interface
       const profileData: UserProfile = {
         id: userData.id,
@@ -151,8 +184,10 @@ export const useUserProfile = () => {
         createdAt: new Date(userData.created_at),
       };
       
+      console.log('✅ Profile loaded successfully:', profileData);
       setProfile(profileData);
     } catch (error) {
+      console.error('❌ Error loading profile:', error);
       console.error('Error loading profile:', error);
     } finally {
       setIsLoading(false);

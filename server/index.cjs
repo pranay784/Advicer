@@ -69,6 +69,10 @@ function createDefaultProfile(userId) {
 }
 
 // Routes
+app.get('/', (req, res) => {
+  res.json({ message: 'Sung Jin Woo Server is running', status: 'active' });
+});
+
 app.get('/api/user/profile', async (req, res) => {
   try {
     await ensureDataDir();

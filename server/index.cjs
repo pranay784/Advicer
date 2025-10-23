@@ -1,9 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// JWT Secret (in production, use environment variable)
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -15,6 +20,24 @@ if (!supabaseUrl || !supabaseServiceKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+};
 
 // Middleware
 app.use(cors());
@@ -43,17 +66,166 @@ app.get('/', (req, res) => {
   res.json({ message: 'Sung Jin Woo Server is running', status: 'active' });
 });
 
+// Authentication Routes
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Check if user already exists
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('email', email)
+      .single();
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists with this email' });
+    }
+
+    // Hash password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Create new user
+    const { data: newUser, error: insertError } = await supabase
+      .from('users')
+      .insert([{
+        email,
+        password_hash: hashedPassword,
+        name: name || null,
+        level: 1,
+        experience: 0,
+        strength: 10,
+        endurance: 10,
+        agility: 10,
+        intelligence: 10,
+        willpower: 10,
+        current_day_id: 1,
+        setup_completed: false
+      }])
+      .select('id, email, name, level, experience')
+      .single();
+
+    if (insertError) throw insertError;
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: newUser.id, email: newUser.email },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      message: 'User created successfully',
+      token,
+      user: newUser
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user by email
+    const { data: user, error: fetchError } = await supabase
+      .from('users')
+      .select('id, email, name, password_hash, level, experience')
+      .eq('email', email)
+      .single();
+
+    if (fetchError || !user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', user.id);
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Remove password hash from response
+    const { password_hash, ...userWithoutPassword } = user;
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: userWithoutPassword
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Protected route to get current user
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, email, name, level, experience, strength, endurance, agility, intelligence, willpower')
+      .eq('id', req.user.userId)
+      .single();
+
+    if (error || !user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ error: 'Failed to get user data' });
+  }
+});
+
 app.get('/api/user/profile', async (req, res) => {
   try {
-    // For now, we'll use a simple IP-based user identification
-    // In production, you'd use proper authentication
-    const userIp = req.ip.replace(/^::ffff:/, '');
+    // Get user ID from JWT token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
     
-    // Try to find existing user by IP (temporary solution)
+    let userId;
+    if (token && token !== 'guest_token') {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        userId = decoded.userId;
+      } catch (err) {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+    } else {
+      // Handle guest users or fallback to IP-based identification
+      userId = req.ip.replace(/^::ffff:/, '');
+    }
+    
+    // Try to find existing user
     const { data: existingUser, error: fetchError } = await supabase
       .from('users')
       .select('*')
-      .eq('name', userIp) // Using name field temporarily to store IP
+      .eq(token && token !== 'guest_token' ? 'id' : 'name', userId)
       .limit(1); // Use limit(1) to handle potential duplicate IPs
     
     if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
@@ -63,7 +235,7 @@ app.get('/api/user/profile', async (req, res) => {
     if (!existingUser || existingUser.length === 0) { // Check if any user was found
       // Create new user
       const defaultProfile = createDefaultProfile();
-      defaultProfile.name = userIp; // Temporary IP storage
+      defaultProfile.name = userId; // Store identifier
       
       const { data: newUser, error: insertError } = await supabase
         .from('users')
@@ -95,13 +267,27 @@ app.get('/api/user/profile', async (req, res) => {
 
 app.post('/api/user/profile', async (req, res) => {
   try {
-    const userIp = req.ip.replace(/^::ffff:/, '');
+    // Get user ID from JWT token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    let userId;
+    if (token && token !== 'guest_token') {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        userId = decoded.userId;
+      } catch (err) {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+    } else {
+      userId = req.ip.replace(/^::ffff:/, '');
+    }
     
     // Find user by IP
     const { data: existingUser, error: fetchError } = await supabase
       .from('users')
       .select('*')
-      .eq('name', userIp)
+      .eq(token && token !== 'guest_token' ? 'id' : 'name', userId)
       .limit(1); // Use limit(1)
       
     if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
@@ -129,14 +315,29 @@ app.post('/api/user/profile', async (req, res) => {
 
 app.post('/api/user/experience', async (req, res) => {
   try {
-    const userIp = req.ip.replace(/^::ffff:/, '');
+    // Get user ID from JWT token
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    let userId;
+    if (token && token !== 'guest_token') {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        userId = decoded.userId;
+      } catch (err) {
+        return res.status(401).json({ error: 'Invalid token' });
+      }
+    } else {
+      userId = req.ip.replace(/^::ffff:/, '');
+    }
+    
     const { amount } = req.body;
     
     // Find user by IP
     const { data: existingUser, error: fetchError } = await supabase
       .from('users')
       .select('*')
-      .eq('name', userIp)
+      .eq(token && token !== 'guest_token' ? 'id' : 'name', userId)
       .limit(1); // Use limit(1)
       
     if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');

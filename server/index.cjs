@@ -497,7 +497,7 @@ app.get('/api/user/achievements', async (req, res) => {
       .from('achievements')
       .select('*')
       .eq('user_id', existingUser[0].id) // Access the first user's ID
-      .order('unlocked_date', { ascending: false }); // Use unlocked_date
+      .order('unlocked_date', { ascending: false });
       
     if (achievementsError) throw achievementsError;
     

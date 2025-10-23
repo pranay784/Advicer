@@ -78,7 +78,7 @@ export const useUserProfile = () => {
         const { data: updatedUser, error: updateError } = await supabase
           .from('users')
           .update({ last_login: new Date().toISOString() })
-          .eq('id', existingUser.id)
+          .eq('id', existingUser[0].id)
           .select('*')
           .single();
           
@@ -252,8 +252,8 @@ export const useUserProfile = () => {
       // Insert conversation into history
       const { error: insertError } = await supabase
         .from('conversation_history')
+        .insert([{
           user_id: existingUser[0].id, // Access the first user's ID
-          user_id: existingUser.id,
           user_message: userMessage,
           sjw_response: sjwResponse
         }]);
@@ -263,7 +263,8 @@ export const useUserProfile = () => {
       // Update last login
       await supabase
         .from('users')
-        .update({ last_login: new Date().toISOString() }).eq('id', existingUser[0].id);
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', existingUser[0].id);
     } catch (error) {
       console.error('Error saving conversation:', error);
     }
@@ -288,7 +289,7 @@ export const useUserProfile = () => {
       if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
       
       // Add experience and calculate new level
-      const newExperience = existingUser.experience + amount;
+      const newExperience = existingUser[0].experience + amount;
       const newLevel = Math.floor(newExperience / 100) + 1;
       
       const { data: updatedUser, error: updateError } = await supabase
@@ -328,8 +329,8 @@ export const useUserProfile = () => {
       // Insert new goal
       const { data: newGoal, error: insertError } = await supabase
         .from('goals')
+        .insert([{
           user_id: existingUser[0].id, // Access the first user's ID
-          user_id: existingUser.id,
           title: goal.title,
           description: goal.description,
           category: goal.category,
@@ -407,8 +408,8 @@ export const useUserProfile = () => {
       // Insert new quest
       const { data: newQuest, error: insertError } = await supabase
         .from('daily_quests')
+        .insert([{
           user_id: existingUser[0].id, // Access the first user's ID
-          user_id: existingUser.id,
           title: quest.title,
           description: quest.description,
           category: quest.category,
@@ -465,7 +466,7 @@ export const useUserProfile = () => {
         .eq('id', questId);
       
       // Update user experience and level
-      const newExperience = existingUser.experience + (quest.experience_reward || 10);
+      const newExperience = existingUser[0].experience + (quest.experience_reward || 10);
       const newLevel = Math.floor(newExperience / 100) + 1;
       
       await supabase
@@ -539,7 +540,8 @@ export const useUserProfile = () => {
       achievements: profile.achievements.length,
       daysSinceStart: Math.floor((Date.now() - profile.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
     };
-  }
+  };
+
   return {
     profile,
     isLoading,

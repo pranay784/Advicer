@@ -19,9 +19,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Missing Supabase environment variables. Some features may not work properly.');
   console.warn('VITE_SUPABASE_URL:', supabaseUrl || 'MISSING');
   console.warn('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'MISSING');
-}
-
-const supabase = createClient(finalSupabaseUrl, finalSupabaseAnonKey);
 
 const defaultProfile: UserProfile = {
   id: 'default',

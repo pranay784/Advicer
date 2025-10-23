@@ -172,31 +172,44 @@ const QuestInterface: React.FC = () => {
   const completeQuest = async () => {
     if (activeQuest) {
       try {
-        console.log('🎯 Starting quest completion for:', activeQuest.title, 'ID:', activeQuest.id);
+        console.log('🎯 =================================');
+        console.log('🎯 QUEST COMPLETION DEBUG START');
+        console.log('🎯 Quest Title:', activeQuest.title);
+        console.log('🎯 Quest ID:', activeQuest.id);
+        console.log('🎯 Quest Type:', activeQuest.type);
+        console.log('🎯 Quest Completed Status:', activeQuest.completed);
         
         // Check if this is a real quest from the profile or a demo quest
         const isRealQuest = !activeQuest.id.startsWith('demo-');
-        console.log('🔍 Is real quest?', isRealQuest);
+        console.log('🔍 Is Real Quest?', isRealQuest);
+        
+        // Log current profile state
+        console.log('👤 Current Profile Level:', profile.level);
+        console.log('👤 Current Profile XP:', profile.experience);
+        console.log('👤 Profile Daily Quests Count:', profile.dailyQuests.length);
+        console.log('👤 Profile Daily Quests:', profile.dailyQuests.map(q => ({ id: q.id, title: q.title, completed: q.completed })));
         
         if (isRealQuest) {
           // Complete the quest in the backend
-          console.log('📤 Calling completeQuestInProfile...');
+          console.log('📤 Calling completeQuestInProfile for real quest...');
           const result = await completeQuestInProfile(activeQuest.id);
-          console.log('✅ Quest completion result:', result);
+          console.log('✅ Real Quest completion result:', result);
         } else {
           // For demo quests, just award some XP
-          console.log('🎮 Demo quest - awarding XP:', activeQuest.expReward);
+          console.log('🎮 Demo quest detected - awarding XP:', activeQuest.expReward);
           const result = await addExperience(activeQuest.expReward);
-          console.log('✅ XP award result:', result);
+          console.log('✅ Demo Quest XP award result:', result);
         }
         
         // Force reload the profile to see changes
-        console.log('🔄 Force reloading profile...');
+        console.log('🔄 Force reloading profile to get latest data...');
         await loadProfile();
-        console.log('✅ Profile reloaded');
+        console.log('✅ Profile reloaded - checking new state...');
+        console.log('👤 New Profile Level:', profile.level);
+        console.log('👤 New Profile XP:', profile.experience);
         
-        // Force a re-render by updating the quest list
-        window.location.reload();
+        console.log('🎯 QUEST COMPLETION DEBUG END');
+        console.log('🎯 =================================');
         
         // Close the active quest view
         setActiveQuest(null);
@@ -208,7 +221,9 @@ const QuestInterface: React.FC = () => {
         setNotes('');
         
       } catch (error) {
-        console.error('❌ Error completing quest:', error);
+        console.error('❌ QUEST COMPLETION ERROR:', error);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
         alert('Failed to complete quest: ' + error.message);
         // Still close the quest view even if there was an error
         setActiveQuest(null);

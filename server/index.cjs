@@ -69,12 +69,15 @@ app.get('/', (req, res) => {
 // Authentication Routes
 app.post('/api/auth/register', async (req, res) => {
   try {
+    console.log('📝 Registration request received:', req.body);
     const { email, password, name } = req.body;
 
     if (!email || !password) {
+      console.log('❌ Missing email or password');
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    console.log('🔍 Checking if user exists:', email);
     // Check if user already exists
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
@@ -82,14 +85,19 @@ app.post('/api/auth/register', async (req, res) => {
       .eq('email', email)
       .single();
 
+    console.log('🔍 Existing user check result:', { existingUser, checkError });
+    
     if (existingUser) {
+      console.log('❌ User already exists');
       return res.status(400).json({ error: 'User already exists with this email' });
     }
 
+    console.log('🔐 Hashing password...');
     // Hash password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+    console.log('👤 Creating new user...');
     // Create new user
     const { data: newUser, error: insertError } = await supabase
       .from('users')
@@ -110,8 +118,10 @@ app.post('/api/auth/register', async (req, res) => {
       .select('id, email, name, level, experience')
       .single();
 
+    console.log('👤 User creation result:', { newUser, insertError });
     if (insertError) throw insertError;
 
+    console.log('🔑 Generating JWT token...');
     // Generate JWT token
     const token = jwt.sign(
       { userId: newUser.id, email: newUser.email },
@@ -119,6 +129,7 @@ app.post('/api/auth/register', async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    console.log('✅ Registration successful for:', email);
     res.status(201).json({
       message: 'User created successfully',
       token,
@@ -126,18 +137,23 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to create user' });
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   try {
+    console.log('🔐 Login request received:', req.body);
     const { email, password } = req.body;
 
     if (!email || !password) {
+      console.log('❌ Missing email or password');
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    console.log('🔍 Finding user by email:', email);
     // Find user by email
     const { data: user, error: fetchError } = await supabase
       .from('users')
@@ -145,22 +161,29 @@ app.post('/api/auth/login', async (req, res) => {
       .eq('email', email)
       .single();
 
+    console.log('🔍 User lookup result:', { user: user ? 'found' : 'not found', fetchError });
+    
     if (fetchError || !user) {
+      console.log('❌ User not found or error:', fetchError);
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    console.log('🔐 Verifying password...');
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
+      console.log('❌ Invalid password');
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    console.log('📅 Updating last login...');
     // Update last login
     await supabase
       .from('users')
       .update({ last_login: new Date().toISOString() })
       .eq('id', user.id);
 
+    console.log('🔑 Generating JWT token...');
     // Generate JWT token
     const token = jwt.sign(
       { userId: user.id, email: user.email },
@@ -171,6 +194,7 @@ app.post('/api/auth/login', async (req, res) => {
     // Remove password hash from response
     const { password_hash, ...userWithoutPassword } = user;
 
+    console.log('✅ Login successful for:', email);
     res.json({
       message: 'Login successful',
       token,
@@ -178,6 +202,8 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ error: 'Login failed' });
   }
 });

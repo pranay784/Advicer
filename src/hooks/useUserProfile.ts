@@ -171,7 +171,7 @@ export const useUserProfile = () => {
       .from('achievements')
       .select('*')
       .eq('user_id', userId)
-      .order('unlocked_date', { ascending: false });
+      .order('unlocked_at', { ascending: false });
       
     if (error) throw error;
     

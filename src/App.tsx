@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Crown, Sword, MessageCircle, Home, Target, User, Trophy } from 'lucide-react';
 import axios from 'axios';
+import { useAuth } from './hooks/useAuth';
 import { useUserProfile } from './hooks/useUserProfile';
+import LoginPage from './components/LoginPage';
 import ProfileSetup from './components/ProfileSetup';
 import HunterDashboard from './components/HunterDashboard';
 import QuestInterface from './components/QuestInterface';
@@ -65,6 +67,7 @@ Focus areas for coaching:
 Always relate your advice to Solo Leveling concepts when helpful - daily quests, stat points, leveling up, skill trees, etc. Keep responses encouraging, practical, and not too long. Reference their specific progress and goals to show you're tracking their journey.`;
 
 function App() {
+  const { user, isAuthenticated, isLoading: authLoading, login } = useAuth();
   const { profile, isLoading, updateProfile, getProfileSummary, saveConversation, addExperience, addGoal, addDailyQuest, loadProfile } = useUserProfile();
   const [currentView, setCurrentView] = useState<'dashboard' | 'quests' | 'profile' | 'chat'>('dashboard');
   const [showProfileSetup, setShowProfileSetup] = useState(false);
@@ -74,6 +77,24 @@ function App() {
   const [lastUserMessage, setLastUserMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Show login page if not authenticated
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="hunter-level-badge mx-auto mb-4 animate-pulse">
+            <Crown className="w-8 h-8 text-current" />
+          </div>
+          <p className="text-yellow-400">Initializing Hunter System...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={login} />;
+  }
 
   useEffect(() => {
     if (!isLoading) {

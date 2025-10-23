@@ -16,7 +16,7 @@ interface Quest {
 }
 
 const QuestInterface: React.FC = () => {
-  const { profile, completeQuest: completeQuestInProfile, addExperience } = useUserProfile();
+  const { profile, completeQuest: completeQuestInProfile, addExperience, loadProfile } = useUserProfile();
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   const [timer, setTimer] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);

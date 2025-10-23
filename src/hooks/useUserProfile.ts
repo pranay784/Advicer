@@ -7,6 +7,17 @@ import { UserProfile, Goal, DailyQuest, Achievement } from '../types/user';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+console.log('Frontend Supabase Environment Check:');
+console.log('VITE_SUPABASE_URL:', supabaseUrl || 'NOT SET');
+console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'NOT SET');
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase environment variables for frontend:');
+  console.error('VITE_SUPABASE_URL:', supabaseUrl || 'MISSING');
+  console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'MISSING');
+  throw new Error('Missing Supabase environment variables. Please check your .env file contains VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+}
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const defaultProfile: UserProfile = {

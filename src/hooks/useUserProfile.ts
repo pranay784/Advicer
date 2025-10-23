@@ -515,8 +515,6 @@ export const useUserProfile = () => {
       achievements: profile.achievements.length,
       daysSinceStart: Math.floor((Date.now() - profile.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
     };
-  };
-
   return {
     profile,
     isLoading,

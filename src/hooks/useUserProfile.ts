@@ -432,7 +432,9 @@ export const useUserProfile = () => {
 
   const completeQuest = async (questId: string) => {
     try {
+      console.log('🎯 completeQuest called with ID:', questId);
       const userIp = await getUserIP();
+      console.log('🌐 User IP:', userIp);
       
       // Find user by IP
       const { data: existingUser, error: fetchError } = await supabase
@@ -442,6 +444,7 @@ export const useUserProfile = () => {
         .limit(1); // Use limit(1)
         
       if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
+        console.error('❌ User not found:', fetchError);
       
       // Get quest details
       const { data: quest, error: questError } = await supabase
@@ -455,7 +458,10 @@ export const useUserProfile = () => {
         throw new Error('Quest not found');
       }
       
+      console.log('👤 Found user:', existingUser[0].id);
+      
       // Update quest completion
+      console.log('🔍 Looking for quest with ID:', questId, 'for user:', existingUser[0].id);
       await supabase
         .from('daily_quests')
         .update({
@@ -496,7 +502,10 @@ export const useUserProfile = () => {
         .eq('name', userIp)
         .limit(1); // Use limit(1)
         
+      console.log('✅ Found quest:', quest.title);
+      
       if (fetchError || !existingUser || existingUser.length === 0) throw new Error('User not found');
+      console.log('📝 Updating quest completion...');
       
       // Insert new achievement
       const { data: newAchievement, error: insertError } = await supabase
@@ -510,12 +519,25 @@ export const useUserProfile = () => {
         .select()
         .single();
         
+      console.log('💰 Updating user XP:', existingUser[0].experience, '->', newExperience);
+      console.log('📈 Level update:', existingUser[0].level, '->', newLevel);
+      
       if (insertError) throw insertError;
+        console.error('❌ Quest not found:', questError);
+        console.log('🔍 Available quests for user:');
+        const { data: allQuests } = await supabase
+          .from('daily_quests')
+          .select('*')
+          .eq('user_id', existingUser[0].id);
+        console.log('📋 All user quests:', allQuests);
       
       // Reload profile to get updated data
+      console.log('🔄 Reloading profile...');
       await loadProfile();
+      console.log('✅ Quest completion process finished');
     } catch (error) {
       console.error('Error adding achievement:', error);
+      throw error; // Re-throw so the UI can handle it
     }
   };
 

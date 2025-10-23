@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Crown, Sword, MessageCircle } from 'lucide-react';
+import { Send, Crown, Sword, MessageCircle, Home, Target, User, Trophy } from 'lucide-react';
 import axios from 'axios';
 import { useUserProfile } from './hooks/useUserProfile';
 import ProfileSetup from './components/ProfileSetup';
-import UserStats from './components/UserStats';
-import SungJinWooAvatar from './components/SungJinWooAvatar';
-import SpeechBubble from './components/SpeechBubble';
+import HunterDashboard from './components/HunterDashboard';
+import QuestInterface from './components/QuestInterface';
+import HunterProfile from './components/HunterProfile';
 import { UserProfile } from './types/user';
+import './styles/hunter-theme.css';
 
 const createSystemPrompt = (userProfile: UserProfile, profileSummary: any) => `You are Sung Jin Woo from Solo Leveling. You are the Shadow Monarch, an S-rank Hunter who started as the weakest E-rank hunter but became incredibly powerful through the System.
 
@@ -65,13 +66,8 @@ Always relate your advice to Solo Leveling concepts when helpful - daily quests,
 
 function App() {
   const { profile, isLoading, updateProfile, getProfileSummary, saveConversation, addExperience, addGoal, addDailyQuest, loadProfile } = useUserProfile();
+  const [currentView, setCurrentView] = useState<'dashboard' | 'quests' | 'profile' | 'chat'>('dashboard');
   const [showProfileSetup, setShowProfileSetup] = useState(false);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [currentSJWMessage, setCurrentSJWMessage] = useState<string>('');
-  const [showSpeechBubble, setShowSpeechBubble] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUserMessage, setLastUserMessage] = useState<string>('');
 
   useEffect(() => {
     if (!isLoading) {
@@ -453,19 +449,55 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <Crown className="w-8 h-8 text-white" />
+          <div className="hunter-level-badge mx-auto mb-4 animate-pulse">
+            <Crown className="w-8 h-8 text-current" />
           </div>
-          <p className="text-purple-300">Loading your profile...</p>
+          <p className="text-yellow-400">Initializing Hunter System...</p>
         </div>
       </div>
     );
   }
 
+  const renderCurrentView = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return <HunterDashboard />;
+      case 'quests':
+        return <QuestInterface />;
+      case 'profile':
+        return <HunterProfile />;
+      case 'chat':
+        return renderChatInterface();
+      default:
+        return <HunterDashboard />;
+    }
+  };
+
+  const renderChatInterface = () => (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 p-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="hunter-card text-center">
+          <Crown className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
+          <h2 className="hunter-heading text-2xl mb-4">Chat with Sung Jin Woo</h2>
+          <p className="text-gray-400 mb-6">
+            The Shadow Monarch is currently in development. 
+            Use the Dashboard and Quests to track your Hunter journey for now.
+          </p>
+          <button 
+            onClick={() => setCurrentView('dashboard')}
+            className="hunter-btn hunter-btn-primary"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900">
       {showProfileSetup && (
         <ProfileSetup
           onComplete={handleProfileSetupComplete}
@@ -473,141 +505,53 @@ function App() {
         />
       )}
 
-      {/* Sung Jin Woo Avatar and Speech Bubble - Fixed Position */}
-      <div className="fixed top-4 right-4 z-40 flex flex-col items-end space-y-4">
-        {/* Speech Bubble */}
-        {showSpeechBubble && currentSJWMessage && (
-          <div className="animate-in slide-in-from-right-4 duration-500">
-            <SpeechBubble 
-              message={currentSJWMessage}
-              isTyping={isTyping}
-              onTypingComplete={() => {
-                // Auto-hide speech bubble after a delay
-                setTimeout(() => setShowSpeechBubble(false), 5000);
-              }}
-            />
-          </div>
-        )}
-        
-        {/* Avatar */}
-        <div className="animate-in slide-in-from-right-4 duration-300">
-          <SungJinWooAvatar 
-            isTyping={isTyping}
-            isActive={showSpeechBubble}
-            message={currentSJWMessage}
-          />
-        </div>
-        
-        {/* Toggle Speech Bubble Button */}
-        {!showSpeechBubble && currentSJWMessage && (
-          <button
-            onClick={() => setShowSpeechBubble(true)}
-            className="bg-purple-600/80 hover:bg-purple-600 text-white p-2 rounded-full shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-105"
-            title="Show last message"
-          >
-            <MessageCircle className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-
-      {/* Debug Panel (Development Only) */}
-      {isDevelopment && (
-        <div className="fixed bottom-4 left-4 bg-black/80 p-4 rounded-lg text-white text-xs space-y-2">
-          <div className="font-bold">Debug Panel</div>
-          <button onClick={testCreateGoal} className="bg-green-600 px-2 py-1 rounded text-xs">
-            Test Create Goal
-          </button>
-          <button onClick={testProcessResponse} className="bg-blue-600 px-2 py-1 rounded text-xs">
-            Test Process Response
-          </button>
-          <div>Level: {getProfileSummary().level} | XP: {getProfileSummary().experience}</div>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="bg-black/50 backdrop-blur-sm border-b border-purple-500/20 p-4">
-        <div className="max-w-4xl mx-auto flex items-center space-x-4 pr-32">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center shadow-lg">
-            <Crown className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Sung Jin Woo</h1>
-            <p className="text-sm text-purple-300">
-              Personal Leveling Coach • Shadow Monarch • Level {getProfileSummary().level}
-              {error && <span className="text-red-400 ml-2">• Connection Issues</span>}
-            </p>
-          </div>
-          <div className="flex-1 flex justify-end items-center space-x-2">
+      {/* Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur-sm border-t border-gray-700 p-4 z-50">
+        <div className="max-w-md mx-auto">
+          <div className="flex justify-around">
             <button
-              onClick={() => setShowProfileSetup(true)}
-              className="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 px-3 py-1 rounded-full transition-colors"
+              onClick={() => setCurrentView('dashboard')}
+              className={`flex flex-col items-center space-y-1 p-2 rounded-lg transition-colors ${
+                currentView === 'dashboard' ? 'text-yellow-400 bg-gray-800' : 'text-gray-400 hover:text-white'
+              }`}
             >
-              Update Profile
+              <Home className="w-6 h-6" />
+              <span className="text-xs">Dashboard</span>
+            </button>
+            <button
+              onClick={() => setCurrentView('quests')}
+              className={`flex flex-col items-center space-y-1 p-2 rounded-lg transition-colors ${
+                currentView === 'quests' ? 'text-yellow-400 bg-gray-800' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Target className="w-6 h-6" />
+              <span className="text-xs">Quests</span>
+            </button>
+            <button
+              onClick={() => setCurrentView('profile')}
+              className={`flex flex-col items-center space-y-1 p-2 rounded-lg transition-colors ${
+                currentView === 'profile' ? 'text-yellow-400 bg-gray-800' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <User className="w-6 h-6" />
+              <span className="text-xs">Profile</span>
+            </button>
+            <button
+              onClick={() => setCurrentView('chat')}
+              className={`flex flex-col items-center space-y-1 p-2 rounded-lg transition-colors ${
+                currentView === 'chat' ? 'text-yellow-400 bg-gray-800' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <MessageCircle className="w-6 h-6" />
+              <span className="text-xs">Chat</span>
             </button>
           </div>
-          <Sword className="w-6 h-6 text-purple-400" />
         </div>
       </div>
 
-      {/* User Stats */}
-      <div className="max-w-4xl mx-auto w-full px-4 pt-4">
-        <UserStats />
-      </div>
-
-      {/* Main Content Area - Show last user message if available */}
-      <div className="flex-1 flex items-center justify-center p-4">
-        <div className="max-w-4xl mx-auto pr-32 text-center">
-          {lastUserMessage ? (
-            <div className="bg-black/30 backdrop-blur-sm border border-blue-500/20 rounded-xl p-6 mb-4">
-              <h3 className="text-blue-300 font-semibold mb-2">Your Last Message:</h3>
-              <p className="text-white">{lastUserMessage}</p>
-            </div>
-          ) : (
-            <div className="text-center text-purple-300/70">
-              <Crown className="w-16 h-16 mx-auto mb-4 text-purple-400/50" />
-              <p className="text-lg mb-2">Ready to level up, Hunter?</p>
-              <p className="text-sm">Start a conversation with your Shadow Monarch coach</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-900/50 border-t border-red-500/20 p-3">
-          <div className="max-w-4xl mx-auto pr-32">
-            <p className="text-red-300 text-sm text-center">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Input Area */}
-      <div className="bg-black/50 backdrop-blur-sm border-t border-purple-500/20 p-4">
-        <div className="max-w-4xl mx-auto pr-32">
-          <div className="flex items-end space-x-4">
-            <div className="flex-1 relative">
-              <textarea
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Tell me about your goals, challenges, or what you want to improve..."
-                className="w-full bg-gray-800/80 border border-purple-500/30 rounded-2xl px-4 py-3 pr-12 text-white placeholder-gray-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 resize-none backdrop-blur-sm"
-                rows={1}
-                style={{ minHeight: '48px', maxHeight: '120px' }}
-              />
-            </div>
-            <button
-              onClick={handleSendMessage}
-              disabled={!inputText.trim() || isTyping}
-              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-gray-600 disabled:to-gray-700 text-white p-3 rounded-2xl shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </div>
-          <p className="text-xs text-purple-300/70 mt-2 text-center">
-            Press Enter to send • Level {getProfileSummary().level} • {getProfileSummary().experience} XP • IP-based auto-save
-          </p>
-        </div>
+      {/* Main Content */}
+      <div className="pb-20">
+        {renderCurrentView()}
       </div>
     </div>
   );

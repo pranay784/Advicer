@@ -68,6 +68,12 @@ function App() {
   const { profile, isLoading, updateProfile, getProfileSummary, saveConversation, addExperience, addGoal, addDailyQuest, loadProfile } = useUserProfile();
   const [currentView, setCurrentView] = useState<'dashboard' | 'quests' | 'profile' | 'chat'>('dashboard');
   const [showProfileSetup, setShowProfileSetup] = useState(false);
+  const [currentSJWMessage, setCurrentSJWMessage] = useState('');
+  const [showSpeechBubble, setShowSpeechBubble] = useState(false);
+  const [inputText, setInputText] = useState('');
+  const [lastUserMessage, setLastUserMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading) {

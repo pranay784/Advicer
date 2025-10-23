@@ -49,6 +49,7 @@ const defaultProfile: UserProfile = {
 export const useUserProfile = () => {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [isLoading, setIsLoading] = useState(true);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   useEffect(() => {
     loadProfile();
@@ -57,12 +58,28 @@ export const useUserProfile = () => {
   const loadProfile = async () => {
     if (!supabase) {
       console.error('❌ Supabase client not initialized');
+      setDbError('Supabase client not initialized');
       setIsLoading(false);
       return;
     }
 
     try {
       console.log('🔄 Loading user profile...');
+      setDbError(null);
+      
+      // First, check if the users table exists
+      console.log('🔍 Checking if users table exists...');
+      const { data: tableCheck, error: tableError } = await supabase
+        .from('users')
+        .select('count', { count: 'exact', head: true });
+      
+      if (tableError && tableError.code === 'PGRST205') {
+        console.error('❌ Users table does not exist in database');
+        setDbError('Database tables not found. Please run the migration script in your Supabase dashboard.');
+        setIsLoading(false);
+        return;
+      }
+      
       // Get user IP for identification (temporary solution)
       const userIp = await getUserIP();
       console.log('🌐 User IP:', userIp);
@@ -71,12 +88,7 @@ export const useUserProfile = () => {
       console.log('🔍 Searching for existing user...');
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
-        .select(`
-          *,
-          goals(*),
-          daily_quests(*),
-          achievements(*)
-        `)
+        .select('*')
         .eq('name', userIp)
         .single();
       
@@ -106,12 +118,7 @@ export const useUserProfile = () => {
             current_day_id: 1,
             setup_completed: false
           }])
-          .select(`
-            *,
-            goals(*),
-            daily_quests(*),
-            achievements(*)
-          `)
+          .select('*')
           .single();
           
         console.log('✅ New user created:', newUser);
@@ -124,18 +131,21 @@ export const useUserProfile = () => {
           .from('users')
           .update({ last_login: new Date().toISOString() })
           .eq('id', existingUser.id)
-          .select(`
-            *,
-            goals(*),
-            daily_quests(*),
-            achievements(*)
-          `)
+          .select('*')
           .single();
           
         console.log('✅ User updated:', updatedUser);
         if (updateError) throw updateError;
         userData = updatedUser;
       }
+      
+      // Load related data separately to avoid join issues
+      console.log('🔄 Loading related data...');
+      const [goalsData, questsData, achievementsData] = await Promise.all([
+        loadUserGoals(userData.id),
+        loadUserQuests(userData.id),
+        loadUserAchievements(userData.id)
+      ]);
       
       console.log('🔄 Transforming user data...');
       // Transform Supabase data to match UserProfile interface
@@ -151,35 +161,9 @@ export const useUserProfile = () => {
           intelligence: userData.intelligence,
           willpower: userData.willpower,
         },
-        goals: (userData.goals || []).map((goal: any) => ({
-          id: goal.id,
-          title: goal.title,
-          description: goal.description || '',
-          category: goal.category,
-          targetDate: goal.target_date ? new Date(goal.target_date) : undefined,
-          progress: goal.progress,
-          status: goal.status,
-          createdAt: new Date(goal.created_at),
-        })),
-        dailyQuests: (userData.daily_quests || []).map((quest: any) => ({
-          id: quest.id,
-          title: quest.title,
-          description: quest.description || '',
-          category: quest.category,
-          difficulty: quest.difficulty,
-          experienceReward: quest.experience_reward,
-          completed: quest.completed,
-          streak: quest.streak,
-          lastCompleted: quest.last_completed ? new Date(quest.last_completed) : undefined,
-          createdAt: new Date(quest.created_at),
-        })),
-        achievements: (userData.achievements || []).map((achievement: any) => ({
-          id: achievement.id,
-          title: achievement.title,
-          description: achievement.description || '',
-          icon: achievement.icon || '',
-          unlockedAt: new Date(achievement.unlocked_at),
-        })),
+        goals: goalsData,
+        dailyQuests: questsData,
+        achievements: achievementsData,
         lastLogin: new Date(userData.last_login),
         createdAt: new Date(userData.created_at),
       };
@@ -188,9 +172,87 @@ export const useUserProfile = () => {
       setProfile(profileData);
     } catch (error) {
       console.error('❌ Error loading profile:', error);
-      console.error('Error loading profile:', error);
+      setDbError(error instanceof Error ? error.message : 'Unknown error occurred');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Helper functions to load related data
+  const loadUserGoals = async (userId: string): Promise<Goal[]> => {
+    try {
+      const { data: goals, error } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+        
+      if (error && error.code !== 'PGRST205') throw error;
+      
+      return (goals || []).map((goal: any) => ({
+        id: goal.id,
+        title: goal.title,
+        description: goal.description || '',
+        category: goal.category,
+        targetDate: goal.target_date ? new Date(goal.target_date) : undefined,
+        progress: goal.progress,
+        status: goal.status,
+        createdAt: new Date(goal.created_at),
+      }));
+    } catch (error) {
+      console.warn('Goals table not found, using empty array');
+      return [];
+    }
+  };
+
+  const loadUserQuests = async (userId: string): Promise<DailyQuest[]> => {
+    try {
+      const { data: quests, error } = await supabase
+        .from('daily_quests')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+        
+      if (error && error.code !== 'PGRST205') throw error;
+      
+      return (quests || []).map((quest: any) => ({
+        id: quest.id,
+        title: quest.title,
+        description: quest.description || '',
+        category: quest.category,
+        difficulty: quest.difficulty,
+        experienceReward: quest.experience_reward,
+        completed: quest.completed,
+        streak: quest.streak,
+        lastCompleted: quest.last_completed ? new Date(quest.last_completed) : undefined,
+        createdAt: new Date(quest.created_at),
+      }));
+    } catch (error) {
+      console.warn('Daily quests table not found, using empty array');
+      return [];
+    }
+  };
+
+  const loadUserAchievements = async (userId: string): Promise<Achievement[]> => {
+    try {
+      const { data: achievements, error } = await supabase
+        .from('achievements')
+        .select('*')
+        .eq('user_id', userId)
+        .order('unlocked_at', { ascending: false });
+        
+      if (error && error.code !== 'PGRST205') throw error;
+      
+      return (achievements || []).map((achievement: any) => ({
+        id: achievement.id,
+        title: achievement.title,
+        description: achievement.description || '',
+        icon: achievement.icon || '',
+        unlockedAt: new Date(achievement.unlocked_at),
+      }));
+    } catch (error) {
+      console.warn('Achievements table not found, using empty array');
+      return [];
     }
   };
 
@@ -554,6 +616,7 @@ export const useUserProfile = () => {
   return {
     profile,
     isLoading,
+    dbError,
     updateProfile,
     addExperience,
     addGoal,

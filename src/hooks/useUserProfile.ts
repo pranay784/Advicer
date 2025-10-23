@@ -432,9 +432,10 @@ export const useUserProfile = () => {
 
   const completeQuest = async (questId: string) => {
     try {
-      console.log('🎯 completeQuest called with ID:', questId);
+      console.log('🎯 ===== COMPLETE QUEST HOOK START =====');
+      console.log('🎯 Quest ID to complete:', questId);
       const userIp = await getUserIP();
-      console.log('🌐 User IP:', userIp);
+      console.log('🌐 User IP for identification:', userIp);
       
       // Find user by IP
       const { data: existingUser, error: fetchError } = await supabase
@@ -444,14 +445,18 @@ export const useUserProfile = () => {
         .limit(1); // Use limit(1)
         
       if (fetchError || !existingUser || existingUser.length === 0) {
-        console.error('❌ User not found:', fetchError);
+        console.error('❌ USER NOT FOUND ERROR:', fetchError);
         throw new Error('User not found');
       }
       
-      console.log('👤 Found user:', existingUser[0].id);
+      console.log('👤 Found user with ID:', existingUser[0].id);
+      console.log('👤 User data:', existingUser[0]);
       
       // Get quest details first
-      console.log('🔍 Looking for quest with ID:', questId, 'for user:', existingUser[0].id);
+      console.log('🔍 Searching for quest in database...');
+      console.log('🔍 Quest ID:', questId);
+      console.log('🔍 User ID:', existingUser[0].id);
+      
       const { data: quest, error: questError } = await supabase
         .from('daily_quests')
         .select('*')
@@ -460,26 +465,30 @@ export const useUserProfile = () => {
         .single();
         
       if (questError || !quest) {
-        console.error('❌ Quest not found:', questError);
-        console.log('🔍 Available quests for user:');
+        console.error('❌ QUEST NOT FOUND ERROR:', questError);
+        console.log('🔍 Let me check what quests exist for this user...');
         const { data: allQuests } = await supabase
           .from('daily_quests')
           .select('*')
           .eq('user_id', existingUser[0].id);
-        console.log('📋 All user quests:', allQuests);
+        console.log('📋 All available quests for user:', allQuests);
+        console.log('📋 Quest count:', allQuests?.length || 0);
         throw new Error(`Quest not found: ${questId}`);
       }
       
-      console.log('✅ Found quest:', quest.title);
+      console.log('✅ Found quest in database:');
+      console.log('✅ Quest Title:', quest.title);
+      console.log('✅ Quest Completed Status:', quest.completed);
+      console.log('✅ Quest XP Reward:', quest.experience_reward);
       
       // Check if quest is already completed
       if (quest.completed) {
-        console.log('⚠️ Quest already completed');
+        console.log('⚠️ Quest is already marked as completed in database');
         return { success: true, alreadyCompleted: true };
       }
       
       // Update quest completion
-      console.log('📝 Updating quest completion...');
+      console.log('📝 Updating quest completion status in database...');
       const { error: updateQuestError } = await supabase
         .from('daily_quests')
         .update({
@@ -490,18 +499,22 @@ export const useUserProfile = () => {
         .eq('id', questId);
       
       if (updateQuestError) {
-        console.error('❌ Error updating quest:', updateQuestError);
+        console.error('❌ DATABASE UPDATE ERROR (quest):', updateQuestError);
         throw updateQuestError;
       }
       
-      console.log('✅ Quest marked as completed in database');
+      console.log('✅ Quest successfully marked as completed in database');
       
       // Update user experience and level
       const newExperience = existingUser[0].experience + (quest.experience_reward || 10);
       const newLevel = Math.floor(newExperience / 100) + 1;
       
-      console.log('💰 Updating user XP:', existingUser[0].experience, '->', newExperience);
-      console.log('📈 Level update:', existingUser[0].level, '->', newLevel);
+      console.log('💰 Calculating XP update:');
+      console.log('💰 Current XP:', existingUser[0].experience);
+      console.log('💰 XP Reward:', quest.experience_reward || 10);
+      console.log('💰 New XP Total:', newExperience);
+      console.log('📈 Current Level:', existingUser[0].level);
+      console.log('📈 New Level:', newLevel);
       
       const { error: updateUserError } = await supabase
         .from('users')
@@ -513,20 +526,23 @@ export const useUserProfile = () => {
         .eq('id', existingUser[0].id);
       
       if (updateUserError) {
-        console.error('❌ Error updating user:', updateUserError);
+        console.error('❌ DATABASE UPDATE ERROR (user):', updateUserError);
         throw updateUserError;
       }
       
-      console.log('✅ User XP and level updated in database');
+      console.log('✅ User XP and level successfully updated in database');
       
       // Reload profile to get updated data
-      console.log('🔄 Reloading profile...');
+      console.log('🔄 Reloading profile to get fresh data from database...');
       await loadProfile();
-      console.log('✅ Quest completion process finished');
+      console.log('✅ Profile reloaded successfully');
+      console.log('🎯 ===== COMPLETE QUEST HOOK END =====');
       
       return { success: true, newExperience, newLevel };
     } catch (error) {
-      console.error('Error completing quest:', error);
+      console.error('❌ COMPLETE QUEST HOOK ERROR:', error);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error stack:', error.stack);
       throw error;
     }
   };

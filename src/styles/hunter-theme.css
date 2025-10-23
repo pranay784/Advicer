@@ -1,0 +1,464 @@
+/* Hunter Transformation System - Design System */
+
+/* ===== COLOR PALETTE ===== */
+:root {
+  /* Primary Colors */
+  --hunter-dark: #0a0f0d;
+  --hunter-green: #1a4d33;
+  --hunter-gold: #d4af37;
+  --hunter-silver: #c0c0c0;
+  --hunter-bronze: #cd7f32;
+
+  /* Secondary Colors */
+  --hunter-blood: #8b0000;
+  --hunter-sky: #87ceeb;
+  --hunter-earth: #8b7355;
+  --hunter-fire: #ff4500;
+
+  /* UI Colors */
+  --bg-primary: #0a0f0d;
+  --bg-secondary: #1a1f1d;
+  --bg-card: #1e2321;
+  --text-primary: #ffffff;
+  --text-secondary: #b0b0b0;
+  --text-accent: #d4af37;
+  --border: #2a2f2d;
+  --border-accent: #3a4f3d;
+
+  /* Status Colors */
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --info: #3b82f6;
+
+  /* Typography */
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Oxanium', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Font Sizes */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Border Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-hunter: 0 4px 20px rgba(212, 175, 55, 0.15);
+
+  /* Animations */
+  --transition-fast: 150ms ease-in-out;
+  --transition-normal: 250ms ease-in-out;
+  --transition-slow: 350ms ease-in-out;
+}
+
+/* ===== GLOBAL STYLES ===== */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-primary);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+/* ===== TYPOGRAPHY ===== */
+.hunter-heading {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: var(--text-accent);
+}
+
+.hunter-mono {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+/* ===== COMPONENT STYLES ===== */
+
+/* Hunter Cards */
+.hunter-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.hunter-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--hunter-gold), var(--hunter-green));
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.hunter-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-hunter);
+  transform: translateY(-2px);
+}
+
+.hunter-card:hover::before {
+  opacity: 1;
+}
+
+/* Hunter Buttons */
+.hunter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-6);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-primary);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.hunter-btn-primary {
+  background: linear-gradient(135deg, var(--hunter-gold), var(--hunter-bronze));
+  color: var(--hunter-dark);
+  box-shadow: var(--shadow-md);
+}
+
+.hunter-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.hunter-btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.hunter-btn-secondary:hover {
+  border-color: var(--hunter-gold);
+  color: var(--hunter-gold);
+}
+
+.hunter-btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+}
+
+.hunter-btn-ghost:hover {
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+
+/* Progress Bars */
+.hunter-progress {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+}
+
+.hunter-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--hunter-green), var(--hunter-gold));
+  border-radius: var(--radius-sm);
+  transition: width var(--transition-slow);
+  position: relative;
+}
+
+.hunter-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Stat Cards */
+.hunter-stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.hunter-stat-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg, transparent, var(--hunter-gold), transparent);
+  opacity: 0;
+  animation: rotate 3s linear infinite;
+  transition: opacity var(--transition-normal);
+}
+
+.hunter-stat-card:hover::before {
+  opacity: 0.1;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.hunter-stat-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--hunter-gold);
+  position: relative;
+  z-index: 1;
+}
+
+.hunter-stat-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: var(--space-1);
+  position: relative;
+  z-index: 1;
+}
+
+.hunter-stat-change {
+  font-size: var(--text-xs);
+  color: var(--success);
+  margin-top: var(--space-1);
+  position: relative;
+  z-index: 1;
+}
+
+/* Badges */
+.hunter-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hunter-badge-gold {
+  background: linear-gradient(135deg, var(--hunter-gold), var(--hunter-bronze));
+  color: var(--hunter-dark);
+  border-color: var(--hunter-gold);
+}
+
+.hunter-badge-rank {
+  background: var(--bg-secondary);
+  color: var(--hunter-silver);
+  border-color: var(--hunter-silver);
+}
+
+/* Quest Items */
+.hunter-quest-item {
+  display: flex;
+  align-items: center;
+  padding: var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  transition: all var(--transition-normal);
+  cursor: pointer;
+}
+
+.hunter-quest-item:hover {
+  border-color: var(--hunter-gold);
+  transform: translateX(4px);
+}
+
+.hunter-quest-item.completed {
+  opacity: 0.7;
+  background: var(--bg-secondary);
+}
+
+.hunter-quest-checkbox {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-right: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.hunter-quest-checkbox.checked {
+  background: var(--hunter-gold);
+  border-color: var(--hunter-gold);
+  color: var(--hunter-dark);
+}
+
+/* Level Badge */
+.hunter-level-badge {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--hunter-gold), var(--hunter-bronze));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--hunter-dark);
+  font-weight: 700;
+  position: relative;
+  box-shadow: var(--shadow-hunter);
+}
+
+.hunter-level-badge::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--hunter-gold), var(--hunter-green), var(--hunter-gold));
+  z-index: -1;
+  animation: rotate 4s linear infinite;
+}
+
+.hunter-level-number {
+  font-size: var(--text-xl);
+  font-family: var(--font-mono);
+}
+
+.hunter-level-label {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Animations */
+@keyframes levelUp {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes questComplete {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes statIncrease {
+  0% { transform: translateY(0); color: var(--text-primary); }
+  50% { transform: translateY(-10px); color: var(--hunter-gold); }
+  100% { transform: translateY(0); color: var(--text-primary); }
+}
+
+/* Utility Classes */
+.hunter-glow {
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+}
+
+.hunter-pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.hunter-slide-in {
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .hunter-card {
+    padding: var(--space-4);
+  }
+  
+  .hunter-stat-card {
+    padding: var(--space-3);
+  }
+  
+  .hunter-stat-value {
+    font-size: var(--text-xl);
+  }
+  
+  .hunter-level-badge {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .hunter-level-number {
+    font-size: var(--text-lg);
+  }
+}
+
+/* Dark mode enhancements */
+@media (prefers-color-scheme: dark) {
+  .hunter-card {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+  
+  .hunter-btn-primary {
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);
+  }
+}

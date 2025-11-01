@@ -39,8 +39,7 @@ const defaultProfile: UserProfile = {
   createdAt: new Date(),
 };
 
-export const useUserProfile = () => {
-  const { getCurrentUserId } = useAuth();
+export const useUserProfile = (user: any) => {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -50,8 +49,8 @@ export const useUserProfile = () => {
 
   const loadProfile = async () => {
     try {
-      // Get current user ID from auth
-      const userId = getCurrentUserId();
+      // Get current user ID from passed user object
+      const userId = user?.id;
       if (!userId) {
         throw new Error('No authenticated user');
       }

@@ -48,48 +48,129 @@ export const useUserProfile = (user: any) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    initializeAuth();
+    if (user) {
+      loadProfile(user.id);
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
-  const initializeAuth = async () => {
-    try {
-      // Get initial session
-      const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('Error getting session:', sessionError);
-        setError(sessionError.message);
-      }
-      
-      setSession(initialSession);
+  useEffect(() => {
+    // Get current session
+    const getCurrentSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
       setAuthLoading(false);
+    };
+    
+    getCurrentSession();
+    
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log('Auth state changed:', event, newSession?.user?.id);
+      setSession(newSession);
       
-      if (initialSession?.user) {
-        await loadProfile(initialSession.user.id);
-      } else {
+      if (newSession?.user && event === 'SIGNED_IN') {
+        await loadProfile(newSession.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setProfile(defaultProfile);
         setIsLoading(false);
       }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user?.id && session?.user?.id) {
+      loadProfile(user.id);
+    }
+  }, [user, session]);
+
+  const loadProfile = async (userId?: string) => {
+    try {
+      setError(null);
       
-      // Listen for auth changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-        console.log('Auth state changed:', event, newSession?.user?.id);
-        setSession(newSession);
-        
-        if (newSession?.user && event === 'SIGNED_IN') {
-          await loadProfile(newSession.user.id);
-        } else if (event === 'SIGNED_OUT') {
-          setProfile(defaultProfile);
-          setIsLoading(false);
+      // Use provided userId or get from current session
+      const currentUserId = userId || session?.user?.id;
+      if (!currentUserId) {
+        console.warn('No authenticated user for loadProfile');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Try to find existing user by ID
+      const { data: existingUser, error: fetchError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', currentUserId)
+        .single();
+      
+      if (fetchError) {
+        console.error('Error fetching user:', fetchError);
+        setError(`Failed to load profile: ${fetchError.message}`);
+        setIsLoading(false);
+        return;
+      }
+      
+      let userData = existingUser;
+      
+      if (!userData) {
+        console.warn('User not found in database');
+        setError('User profile not found');
+        setIsLoading(false);
+        return;
+      } else {
+        // Update last login
+        const { data: updatedUser, error: updateError } = await supabase
+          .from('users')
+          .update({ last_login: new Date().toISOString() })
+          .eq('id', userData.id)
+          .select('*')
+          .single();
+          
+        if (updateError) {
+          console.error('Error updating last login:', updateError);
+          // Don't fail the whole load for this
+        } else {
+          userData = updatedUser;
         }
-      });
+      }
       
-      return () => {
-        subscription.unsubscribe();
+      // Load related data separately to avoid join issues
+      const [goalsData, questsData, achievementsData] = await Promise.all([
+        loadUserGoals(userData.id),
+        loadUserQuests(userData.id),
+        loadUserAchievements(userData.id)
+      ]);
+      
+      // Transform Supabase data to match UserProfile interface
+      const profileData: UserProfile = {
+        id: userData.id,
+        name: userData.name,
+        level: userData.level,
+        experience: userData.experience,
+        stats: {
+          strength: userData.strength,
+          endurance: userData.endurance,
+          agility: userData.agility,
+          intelligence: userData.intelligence,
+          willpower: userData.willpower,
+        },
+        goals: goalsData,
+        dailyQuests: questsData,
+        achievements: achievementsData,
+        lastLogin: new Date(userData.last_login),
+        createdAt: new Date(userData.created_at),
       };
+      
+      setProfile(profileData);
     } catch (error) {
-      console.error('Error initializing auth:', error);
-      setError(error.message);
-      setAuthLoading(false);
+      console.error('❌ Error loading profile:', error);
+      setError(`Failed to load profile: ${error.message}`);
+    } finally {
       setIsLoading(false);
     }
   };

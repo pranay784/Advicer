@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Crown, User, Mail, Lock, Eye, EyeOff, Sword } from 'lucide-react';
 
 interface LoginPageProps {
-  onLogin: (userData: { email: string; name: string; userId: string }) => void;
+  onLogin: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  onRegister: (email: string, password: string, name?: string) => Promise<{ success: boolean; error?: string }>;
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     email: '',
@@ -65,37 +66,17 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          name: formData.name
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Authentication failed');
+      let result;
+      if (isLogin) {
+        result = await onLogin(formData.email, formData.password);
+      } else {
+        result = await onRegister(formData.email, formData.password, formData.name);
       }
 
-      // Store auth token
-      localStorage.setItem('authToken', data.token);
-      localStorage.setItem('userId', data.user.id);
-      localStorage.setItem('userEmail', data.user.email);
-      localStorage.setItem('userName', data.user.name || '');
-
-      // Call onLogin with user data
-      onLogin({
-        email: data.user.email,
-        name: data.user.name || '',
-        userId: data.user.id
-      });
+      if (!result.success) {
+        setError(result.error || 'Authentication failed');
+      }
+      // If successful, the auth state change will be handled by useAuth hook
 
     } catch (error) {
       console.error('Authentication error:', error);
@@ -103,23 +84,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleGuestLogin = () => {
-    // Create a temporary guest user
-    const guestId = 'guest_' + Date.now();
-    const guestData = {
-      email: 'guest@example.com',
-      name: 'Guest Hunter',
-      userId: guestId
-    };
-
-    localStorage.setItem('authToken', 'guest_token');
-    localStorage.setItem('userId', guestId);
-    localStorage.setItem('userEmail', guestData.email);
-    localStorage.setItem('userName', guestData.name);
-
-    onLogin(guestData);
   };
 
   return (
@@ -275,23 +239,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-600"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900 text-gray-400">or</span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleGuestLogin}
-              className="mt-4 w-full hunter-btn hunter-btn-secondary py-3"
-            >
-              Continue as Guest Hunter
-            </button>
-          </div>
 
           <div className="mt-6 text-center text-sm text-gray-400">
             {isLogin ? "Don't have an account? " : "Already have an account? "}

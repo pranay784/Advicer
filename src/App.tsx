@@ -6,7 +6,7 @@ import AuthenticatedAppContent from './components/AuthenticatedAppContent';
 import './styles/hunter-theme.css';
 
 function App() {
-  const { user, isAuthenticated, isLoading: authLoading, login } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, login, register } = useAuth();
 
   // Show login page if not authenticated
   if (authLoading) {
@@ -23,7 +23,7 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    return <LoginPage onLogin={login} />;
+    return <LoginPage onLogin={login} onRegister={register} />;
   }
   
   // Once authenticated, render the main app content

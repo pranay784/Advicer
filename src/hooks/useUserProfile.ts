@@ -44,8 +44,12 @@ export const useUserProfile = (user: any) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (user?.id) {
+      loadProfile();
+    } else {
+      setIsLoading(false);
+    }
+  }, [user?.id]);
 
   const loadProfile = async () => {
     try {

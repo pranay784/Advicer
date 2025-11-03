@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { useAuth } from './useAuth';
 import { UserProfile, Goal, DailyQuest, Achievement } from '../types/user';
 
 // Initialize Supabase client with better error handling
@@ -14,6 +13,8 @@ console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'NOT SET');
 // Create a fallback or handle missing environment variables gracefully
 const finalSupabaseUrl = supabaseUrl || 'https://placeholder.supabase.co';
 const finalSupabaseAnonKey = supabaseAnonKey || 'placeholder-key';
+
+const supabase = createClient(finalSupabaseUrl, finalSupabaseAnonKey);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Missing Supabase environment variables. Some features may not work properly.');
@@ -42,38 +43,90 @@ const defaultProfile: UserProfile = {
 export const useUserProfile = (user: any) => {
   const [profile, setProfile] = useState<UserProfile>(defaultProfile);
   const [isLoading, setIsLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [session, setSession] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user?.id) {
-      loadProfile();
-    } else {
+    initializeAuth();
+  }, []);
+
+  const initializeAuth = async () => {
+    try {
+      // Get initial session
+      const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Error getting session:', sessionError);
+        setError(sessionError.message);
+      }
+      
+      setSession(initialSession);
+      setAuthLoading(false);
+      
+      if (initialSession?.user) {
+        await loadProfile(initialSession.user.id);
+      } else {
+        setIsLoading(false);
+      }
+      
+      // Listen for auth changes
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        console.log('Auth state changed:', event, newSession?.user?.id);
+        setSession(newSession);
+        
+        if (newSession?.user && event === 'SIGNED_IN') {
+          await loadProfile(newSession.user.id);
+        } else if (event === 'SIGNED_OUT') {
+          setProfile(defaultProfile);
+          setIsLoading(false);
+        }
+      });
+      
+      return () => {
+        subscription.unsubscribe();
+      };
+    } catch (error) {
+      console.error('Error initializing auth:', error);
+      setError(error.message);
+      setAuthLoading(false);
       setIsLoading(false);
     }
-  }, [user?.id]);
+  };
 
-  const loadProfile = async () => {
+  const loadProfile = async (userId?: string) => {
     try {
-      // Get current user ID from passed user object
-      const userId = user?.id;
+      setError(null);
+      
+      // Use provided userId or get from current session
+      const currentUserId = userId || session?.user?.id;
       if (!userId) {
-        throw new Error('No authenticated user');
+        console.warn('No authenticated user for loadProfile');
+        setIsLoading(false);
+        return;
       }
       
       // Try to find existing user by ID
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', userId)
+        .eq('id', currentUserId)
         .single();
       
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        throw fetchError;
+      if (fetchError) {
+        console.error('Error fetching user:', fetchError);
+        setError(`Failed to load profile: ${fetchError.message}`);
+        setIsLoading(false);
+        return;
       }
       
       let userData = existingUser;
       
       if (!userData) {
-        throw new Error('User not found');
+        console.warn('User not found in database');
+        setError('User profile not found');
+        setIsLoading(false);
+        return;
       } else {
         // Update last login
         const { data: updatedUser, error: updateError } = await supabase
@@ -83,7 +136,10 @@ export const useUserProfile = (user: any) => {
           .select('*')
           .single();
           
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error('Error updating last login:', updateError);
+          // Don't fail the whole load for this
+        }
         userData = updatedUser;
       }
       
@@ -117,6 +173,7 @@ export const useUserProfile = (user: any) => {
       setProfile(profileData);
     } catch (error) {
       console.error('❌ Error loading profile:', error);
+      setError(`Failed to load profile: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -186,15 +243,19 @@ export const useUserProfile = (user: any) => {
   };
 
   const saveProfile = async (updatedProfile: UserProfile) => {
+    if (!session?.user?.id) {
+      setError('No authenticated user');
+      return;
+    }
+    
     try {
-      const userId = getCurrentUserId();
-      if (!userId) throw new Error('No authenticated user');
+      setError(null);
       
       // Update user profile
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
         .update({
-          name: updatedProfile.name || userIp,
+          name: updatedProfile.name,
           level: updatedProfile.level,
           experience: updatedProfile.experience,
           strength: updatedProfile.stats.strength,
@@ -204,42 +265,56 @@ export const useUserProfile = (user: any) => {
           willpower: updatedProfile.stats.willpower,
           last_login: new Date().toISOString()
         })
-        .eq('id', userId)
+        .eq('id', session.user.id)
         .select()
         .single();
         
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Error saving profile:', updateError);
+        setError(`Failed to save profile: ${updateError.message}`);
+        return;
+      }
       
       // Reload profile to get updated data
-      await loadProfile();
+      await loadProfile(session.user.id);
     } catch (error) {
       console.error('Error saving profile:', error);
+      setError(`Failed to save profile: ${error.message}`);
     }
   };
 
   const saveConversation = async (userMessage: string, sjwResponse: string) => {
+    if (!session?.user?.id) {
+      setError('No authenticated user');
+      return;
+    }
+    
     try {
-      const userId = getCurrentUserId();
-      if (!userId) throw new Error('No authenticated user');
+      setError(null);
       
       // Insert conversation into history
       const { error: insertError } = await supabase
         .from('conversation_history')
         .insert([{
-          user_id: userId,
+          user_id: session.user.id,
           user_message: userMessage,
           sjw_response: sjwResponse
         }]);
         
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Error saving conversation:', insertError);
+        setError(`Failed to save conversation: ${insertError.message}`);
+        return;
+      }
       
       // Update last login
       await supabase
         .from('users')
         .update({ last_login: new Date().toISOString() })
-        .eq('id', userId);
+        .eq('id', session.user.id);
     } catch (error) {
       console.error('Error saving conversation:', error);
+      setError(`Failed to save conversation: ${error.message}`);
     }
   };
 
@@ -249,18 +324,26 @@ export const useUserProfile = (user: any) => {
   };
 
   const addExperience = async (amount: number) => {
+    if (!session?.user?.id) {
+      setError('No authenticated user');
+      return null;
+    }
+    
     try {
-      const userId = getCurrentUserId();
-      if (!userId) throw new Error('No authenticated user');
+      setError(null);
       
       // Find user by ID
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', userId)
+        .eq('id', session.user.id)
         .single();
         
-      if (fetchError || !existingUser) throw new Error('User not found');
+      if (fetchError || !existingUser) {
+        console.error('Error finding user for XP:', fetchError);
+        setError('User not found');
+        return null;
+      }
       
       // Add experience and calculate new level
       const newExperience = existingUser.experience + amount;
@@ -273,30 +356,40 @@ export const useUserProfile = (user: any) => {
           level: newLevel,
           last_login: new Date().toISOString()
         })
-        .eq('id', userId)
+        .eq('id', session.user.id)
         .select()
         .single();
         
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Error updating experience:', updateError);
+        setError(`Failed to add experience: ${updateError.message}`);
+        return null;
+      }
       
       // Reload profile to get updated data
-      await loadProfile();
+      await loadProfile(session.user.id);
       return updatedUser;
     } catch (error) {
       console.error('Error adding experience:', error);
+      setError(`Failed to add experience: ${error.message}`);
+      return null;
     }
   };
 
   const addGoal = async (goal: Omit<Goal, 'id' | 'createdAt'>) => {
+    if (!session?.user?.id) {
+      setError('No authenticated user');
+      return;
+    }
+    
     try {
-      const userId = getCurrentUserId();
-      if (!userId) throw new Error('No authenticated user');
+      setError(null);
       
       // Insert new goal
       const { data: newGoal, error: insertError } = await supabase
         .from('goals')
         .insert([{
-          user_id: userId,
+          user_id: session.user.id,
           title: goal.title,
           description: goal.description,
           category: goal.category,
@@ -307,19 +400,28 @@ export const useUserProfile = (user: any) => {
         .select()
         .single();
         
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Error adding goal:', insertError);
+        setError(`Failed to add goal: ${insertError.message}`);
+        return;
+      }
       
       // Reload profile to get updated data
-      await loadProfile();
+      await loadProfile(session.user.id);
     } catch (error) {
       console.error('Error adding goal:', error);
+      setError(`Failed to add goal: ${error.message}`);
     }
   };
 
   const updateGoal = async (goalId: string, updates: Partial<Goal>) => {
+    if (!session?.user?.id) {
+      setError('No authenticated user');
+      return;
+    }
+    
     try {
-      const userId = getCurrentUserId();
-      if (!userId) throw new Error('No authenticated user');
+      setError(null);
       
       // Update goal
       const { data: updatedGoal, error: updateError } = await supabase
@@ -333,33 +435,43 @@ export const useUserProfile = (user: any) => {
           status: updates.status
         })
         .eq('id', goalId)
-        .eq('user_id', userId)
+        .eq('user_id', session.user.id)
         .select()
         .single();
         
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Error updating goal:', updateError);
+        setError(`Failed to update goal: ${updateError.message}`);
+        return;
+      }
       
       if (!updatedGoal) {
-        throw new Error('Goal not found');
+        setError('Goal not found');
+        return;
       }
       
       // Reload profile to get updated data
-      await loadProfile();
+      await loadProfile(session.user.id);
     } catch (error) {
       console.error('Error updating goal:', error);
+      setError(`Failed to update goal: ${error.message}`);
     }
   };
 
   const addDailyQuest = async (quest: Omit<DailyQuest, 'id' | 'createdAt' | 'completed' | 'streak'>) => {
+    if (!session?.user?.id) {
+      setError('No authenticated user');
+      return;
+    }
+    
     try {
-      const userId = getCurrentUserId();
-      if (!userId) throw new Error('No authenticated user');
+      setError(null);
       
       // Insert new quest
       const { data: newQuest, error: insertError } = await supabase
         .from('daily_quests')
         .insert([{
-          user_id: userId,
+          user_id: session.user.id,
           title: quest.title,
           description: quest.description,
           category: quest.category,
@@ -371,33 +483,44 @@ export const useUserProfile = (user: any) => {
         .select()
         .single();
         
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Error adding quest:', insertError);
+        setError(`Failed to add quest: ${insertError.message}`);
+        return;
+      }
       
       // Reload profile to get updated data
-      await loadProfile();
+      await loadProfile(session.user.id);
     } catch (error) {
       console.error('Error adding quest:', error);
+      setError(`Failed to add quest: ${error.message}`);
     }
   };
 
   const completeQuest = async (questId: string) => {
+    if (!session?.user?.id) {
+      setError('No authenticated user');
+      return { success: false, error: 'No authenticated user' };
+    }
+    
     try {
       console.log('🎯 ===== COMPLETE QUEST HOOK START =====');
       console.log('🎯 Quest ID to complete:', questId);
-      const userId = getCurrentUserId();
-      if (!userId) throw new Error('No authenticated user');
-      console.log('👤 User ID for identification:', userId);
+      console.log('👤 User ID for identification:', session.user.id);
+      
+      setError(null);
       
       // Find user by ID
       const { data: existingUser, error: fetchError } = await supabase
         .from('users')
         .select('*')
-        .eq('id', userId)
+        .eq('id', session.user.id)
         .single();
         
       if (fetchError || !existingUser) {
         console.error('❌ USER NOT FOUND ERROR:', fetchError);
-        throw new Error('User not found');
+        setError('User not found');
+        return { success: false, error: 'User not found' };
       }
       
       console.log('👤 Found user with ID:', existingUser.id);
@@ -424,7 +547,8 @@ export const useUserProfile = (user: any) => {
           .eq('user_id', existingUser.id);
         console.log('📋 All available quests for user:', allQuests);
         console.log('📋 Quest count:', allQuests?.length || 0);
-        throw new Error(`Quest not found: ${questId}`);
+        setError(`Quest not found: ${questId}`);
+        return { success: false, error: `Quest not found: ${questId}` };
       }
       
       console.log('✅ Found quest in database:');
@@ -451,7 +575,8 @@ export const useUserProfile = (user: any) => {
       
       if (updateQuestError) {
         console.error('❌ DATABASE UPDATE ERROR (quest):', updateQuestError);
-        throw updateQuestError;
+        setError(`Failed to complete quest: ${updateQuestError.message}`);
+        return { success: false, error: updateQuestError.message };
       }
       
       console.log('✅ Quest successfully marked as completed in database');
@@ -474,20 +599,21 @@ export const useUserProfile = (user: any) => {
           level: newLevel,
           last_login: new Date().toISOString()
         })
-        .eq('id', userId)
+        .eq('id', session.user.id)
         .select()
         .single();
       
       if (updateUserError) {
         console.error('❌ DATABASE UPDATE ERROR (user):', updateUserError);
-        throw updateUserError;
+        setError(`Failed to update user progress: ${updateUserError.message}`);
+        return { success: false, error: updateUserError.message };
       }
       
       console.log('✅ User XP and level successfully updated in database');
       
       // Reload profile to get updated data
       console.log('🔄 Reloading profile to get fresh data from database...');
-      await loadProfile();
+      await loadProfile(session.user.id);
       console.log('✅ Profile reloaded successfully');
       console.log('🎯 ===== COMPLETE QUEST HOOK END =====');
       
@@ -496,20 +622,25 @@ export const useUserProfile = (user: any) => {
       console.error('❌ COMPLETE QUEST HOOK ERROR:', error);
       console.error('❌ Error message:', error.message);
       console.error('❌ Error stack:', error.stack);
-      throw error;
+      setError(`Failed to complete quest: ${error.message}`);
+      return { success: false, error: error.message };
     }
   };
 
   const addAchievement = async (achievement: Omit<Achievement, 'id' | 'unlockedDate'>) => {
+    if (!session?.user?.id) {
+      setError('No authenticated user');
+      return;
+    }
+    
     try {
-      const userId = getCurrentUserId();
-      if (!userId) throw new Error('No authenticated user');
+      setError(null);
       
       // Insert new achievement
       const { data: newAchievement, error: insertError } = await supabase
         .from('achievements')
         .insert([{
-          user_id: userId,
+          user_id: session.user.id,
           title: achievement.title,
           description: achievement.description,
           icon: achievement.icon
@@ -517,13 +648,17 @@ export const useUserProfile = (user: any) => {
         .select()
         .single();
         
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('Error adding achievement:', insertError);
+        setError(`Failed to add achievement: ${insertError.message}`);
+        return;
+      }
       
       // Reload profile to get updated data
-      await loadProfile();
+      await loadProfile(session.user.id);
     } catch (error) {
       console.error('Error adding achievement:', error);
-      throw error;
+      setError(`Failed to add achievement: ${error.message}`);
     }
   };
 
@@ -553,6 +688,9 @@ export const useUserProfile = (user: any) => {
   return {
     profile,
     isLoading,
+    authLoading,
+    session,
+    error,
     updateProfile,
     addExperience,
     addGoal,
@@ -563,5 +701,6 @@ export const useUserProfile = (user: any) => {
     getProfileSummary,
     saveConversation,
     loadProfile,
+    supabase,
   };
 };

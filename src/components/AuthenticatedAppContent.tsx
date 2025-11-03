@@ -68,7 +68,7 @@ interface AuthenticatedAppContentProps {
 }
 
 function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
-  const { profile, isLoading, updateProfile, getProfileSummary, saveConversation, addExperience, addGoal, addDailyQuest, loadProfile } = useUserProfile(user);
+  const { profile, isLoading, authLoading, session, error: profileError, updateProfile, getProfileSummary, saveConversation, addExperience, addGoal, addDailyQuest, loadProfile } = useUserProfile(user);
   const [currentView, setCurrentView] = useState<'dashboard' | 'quests' | 'profile' | 'chat'>('dashboard');
   const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [currentSJWMessage, setCurrentSJWMessage] = useState('');
@@ -79,7 +79,7 @@ function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && !authLoading && session) {
       // Check if this is a new user or returning user
       const isNewUser = profile.goals.length === 0 && profile.dailyQuests.length === 0;
       const profileSummary = getProfileSummary();
@@ -116,7 +116,7 @@ function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
         }, 1000);
       }
     }
-  }, [isLoading, profile]);
+  }, [isLoading, authLoading, session, profile]);
 
   // Helper function to process AI responses and extract actions
   const processAIResponse = async (responseText: string) => {
@@ -341,6 +341,12 @@ function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
+    // Check authentication before sending message
+    if (!session?.user) {
+      setError('Please log in to chat with Sung Jin Woo');
+      return;
+    }
+
     console.log('📤 SENDING MESSAGE:', inputText);
     console.log('🔍 Checking API key...', !!import.meta.env.VITE_OPENROUTER_API_KEY);
     const userMessage = inputText;
@@ -425,14 +431,36 @@ function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
     }, 2000);
   };
 
-  if (isLoading) {
+  // Show loading while auth is initializing
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="hunter-level-badge mx-auto mb-4 animate-pulse">
             <Crown className="w-8 h-8 text-current" />
           </div>
-          <p className="text-yellow-400">Initializing Hunter System...</p>
+          <p className="text-yellow-400">
+            {authLoading ? 'Authenticating Hunter...' : 'Initializing Hunter System...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if there's a profile error
+  if (profileError && !session) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 flex items-center justify-center p-4">
+        <div className="hunter-card text-center max-w-md">
+          <Crown className="w-16 h-16 mx-auto mb-4 text-red-400" />
+          <h2 className="hunter-heading text-xl mb-4 text-red-400">Authentication Error</h2>
+          <p className="text-gray-300 mb-6">{profileError}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="hunter-btn hunter-btn-primary"
+          >
+            Retry Login
+          </button>
         </div>
       </div>
     );
@@ -456,6 +484,16 @@ function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
   const renderChatInterface = () => (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 p-4">
       <div className="max-w-4xl mx-auto">
+        {/* Show error message if exists */}
+        {(error || profileError) && (
+          <div className="hunter-card mb-4 border-red-500/50 bg-red-900/20">
+            <div className="flex items-center space-x-2 text-red-400">
+              <span className="text-lg">⚠️</span>
+              <span>{error || profileError}</span>
+            </div>
+          </div>
+        )}
+        
         <div className="hunter-card text-center">
           <Crown className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
           <h2 className="hunter-heading text-2xl mb-4">Chat with Sung Jin Woo</h2>
@@ -492,6 +530,7 @@ function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
               className={`flex flex-col items-center space-y-1 p-2 rounded-lg transition-colors ${
                 currentView === 'dashboard' ? 'text-yellow-400 bg-gray-800' : 'text-gray-400 hover:text-white'
               }`}
+              disabled={!session?.user}
             >
               <Home className="w-6 h-6" />
               <span className="text-xs">Dashboard</span>
@@ -501,6 +540,7 @@ function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
               className={`flex flex-col items-center space-y-1 p-2 rounded-lg transition-colors ${
                 currentView === 'quests' ? 'text-yellow-400 bg-gray-800' : 'text-gray-400 hover:text-white'
               }`}
+              disabled={!session?.user}
             >
               <Target className="w-6 h-6" />
               <span className="text-xs">Quests</span>
@@ -510,6 +550,7 @@ function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
               className={`flex flex-col items-center space-y-1 p-2 rounded-lg transition-colors ${
                 currentView === 'profile' ? 'text-yellow-400 bg-gray-800' : 'text-gray-400 hover:text-white'
               }`}
+              disabled={!session?.user}
             >
               <User className="w-6 h-6" />
               <span className="text-xs">Profile</span>
@@ -519,6 +560,7 @@ function AuthenticatedAppContent({ user }: AuthenticatedAppContentProps) {
               className={`flex flex-col items-center space-y-1 p-2 rounded-lg transition-colors ${
                 currentView === 'chat' ? 'text-yellow-400 bg-gray-800' : 'text-gray-400 hover:text-white'
               }`}
+              disabled={!session?.user}
             >
               <MessageCircle className="w-6 h-6" />
               <span className="text-xs">Chat</span>

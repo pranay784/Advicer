@@ -16,13 +16,15 @@ interface Quest {
 }
 
 const QuestInterface: React.FC = () => {
-  const { profile, completeQuest: completeQuestInProfile, addExperience, loadProfile } = useUserProfile();
+  const { profile, session, error: profileError, completeQuest: completeQuestInProfile, addExperience, loadProfile } = useUserProfile();
   const [activeQuest, setActiveQuest] = useState<Quest | null>(null);
   const [timer, setTimer] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [currentSet, setCurrentSet] = useState(1);
   const [formRating, setFormRating] = useState(4);
   const [notes, setNotes] = useState('');
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Convert profile quests to Quest interface format
   const quests: Quest[] = profile.dailyQuests.map(quest => ({
@@ -171,6 +173,15 @@ const QuestInterface: React.FC = () => {
 
   const completeQuest = async () => {
     if (activeQuest) {
+      // Check authentication
+      if (!session?.user) {
+        setError('Please log in to complete quests');
+        return;
+      }
+      
+      setIsCompleting(true);
+      setError(null);
+      
       try {
         console.log('🎯 =================================');
         console.log('🎯 QUEST COMPLETION DEBUG START');
@@ -193,11 +204,23 @@ const QuestInterface: React.FC = () => {
           // Complete the quest in the backend
           console.log('📤 Calling completeQuestInProfile for real quest...');
           const result = await completeQuestInProfile(activeQuest.id);
+          
+          if (!result.success) {
+            setError(result.error || 'Failed to complete quest');
+            return;
+          }
+          
           console.log('✅ Real Quest completion result:', result);
         } else {
           // For demo quests, just award some XP
           console.log('🎮 Demo quest detected - awarding XP:', activeQuest.expReward);
           const result = await addExperience(activeQuest.expReward);
+          
+          if (!result) {
+            setError('Failed to award experience points');
+            return;
+          }
+          
           console.log('✅ Demo Quest XP award result:', result);
         }
         
@@ -224,14 +247,22 @@ const QuestInterface: React.FC = () => {
         console.error('❌ QUEST COMPLETION ERROR:', error);
         console.error('❌ Error message:', error.message);
         console.error('❌ Error stack:', error.stack);
-        alert('Failed to complete quest: ' + error.message);
+        setError('Failed to complete quest: ' + error.message);
         // Still close the quest view even if there was an error
         setActiveQuest(null);
+      } finally {
+        setIsCompleting(false);
       }
     }
   };
 
   const completeSet = async () => {
+    // Check authentication
+    if (!session?.user) {
+      setError('Please log in to complete sets');
+      return;
+    }
+    
     if (activeQuest && activeQuest.sets) {
       if (currentSet < activeQuest.sets) {
         setCurrentSet(currentSet + 1);
@@ -276,6 +307,16 @@ const QuestInterface: React.FC = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 p-4">
         <div className="max-w-2xl mx-auto">
+          {/* Error Display */}
+          {(error || profileError) && (
+            <div className="hunter-card mb-4 border-red-500/50 bg-red-900/20">
+              <div className="flex items-center space-x-2 text-red-400">
+                <span className="text-lg">⚠️</span>
+                <span>{error || profileError}</span>
+              </div>
+            </div>
+          )}
+          
           <div className="hunter-card">
             <div className="flex items-center justify-between mb-6">
               <h1 className="hunter-heading text-2xl">{activeQuest.title}</h1>
@@ -370,12 +411,15 @@ const QuestInterface: React.FC = () => {
                   <button 
                     onClick={completeSet}
                     className="hunter-btn hunter-btn-primary flex-1"
+                    disabled={isCompleting || !session?.user}
                   >
-                    {currentSet < (activeQuest.sets || 1) ? 'Complete Set' : 'Complete Exercise'}
+                    {isCompleting ? 'Completing...' : 
+                     currentSet < (activeQuest.sets || 1) ? 'Complete Set' : 'Complete Exercise'}
                   </button>
                   <button 
                     onClick={handleRetrySet}
                     className="hunter-btn hunter-btn-secondary"
+                    disabled={isCompleting}
                   >
                     <RotateCcw className="w-4 h-4" />
                   </button>
@@ -405,6 +449,26 @@ const QuestInterface: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-900 to-gray-900 p-4">
       <div className="max-w-4xl mx-auto">
+        {/* Error Display */}
+        {(error || profileError) && (
+          <div className="hunter-card mb-4 border-red-500/50 bg-red-900/20">
+            <div className="flex items-center space-x-2 text-red-400">
+              <span className="text-lg">⚠️</span>
+              <span>{error || profileError}</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Authentication Warning */}
+        {!session?.user && (
+          <div className="hunter-card mb-4 border-yellow-500/50 bg-yellow-900/20">
+            <div className="flex items-center space-x-2 text-yellow-400">
+              <span className="text-lg">⚠️</span>
+              <span>Please log in to track your quest progress</span>
+            </div>
+          </div>
+        )}
+        
         <div className="hunter-card mb-6">
           <div className="flex items-center justify-between">
             <div>
